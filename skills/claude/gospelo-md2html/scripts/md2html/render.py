@@ -163,26 +163,47 @@ def render_page(page: dict[str, Any], ctx: RenderContext, page_no: int, total: i
                 f'<div class="page-body">{body}</div>{footer}</section>')
 
     mode = page_mode(page, ctx)
-    figure = first_figure(page) if mode != "single" else None
     header = ""
     if fmt.is_slide:
         title = header_title(page, ctx, doc_title)
         cont = ' <span class="continued">(続き)</span>' if page.get("continued") else ""
         header = f'<header class="page-header"><span class="title">{render_inline(title)}{cont}</span></header>'
-    text_blocks = [b for b in page["blocks"] if b is not figure]
-    figure_mode = "split" if mode != "single" else "single"
-    col_text = "".join(render_block(b, ctx, figure_mode) for b in text_blocks)
-    cols = f'<div class="column-text">{col_text}</div>'
-    if figure is not None:
-        cols += f'<div class="column-figure">{render_block(figure, ctx, "split")}</div>'
+    if mode == "two":
+        cols = _render_two_columns(page, ctx)
+    else:
+        figure = first_figure(page) if mode != "single" else None
+        text_blocks = [b for b in page["blocks"] if b is not figure]
+        figure_mode = "split" if mode != "single" else "single"
+        col_text = "".join(render_block(b, ctx, figure_mode) for b in text_blocks)
+        cols = f'<div class="column-text">{col_text}</div>'
+        if figure is not None:
+            cols += f'<div class="column-figure">{render_block(figure, ctx, "split")}</div>'
     return (f'<section class="page" data-page-id="{_esc(pid)}" data-mode="{mode}">{header}'
             f'<div class="page-body {mode}">{cols}</div>{footer}</section>')
 
 
+def _render_two_columns(page: dict[str, Any], ctx: RenderContext) -> str:
+    """N-order two-column page: segments of [left | right] columns and full-width bands.
+    The placement (`_layout`) is computed by paginate; without it every block is a band."""
+    blocks = page["blocks"]
+    layout = page.get("_layout") or [{"kind": "wide", "index": i} for i in range(len(blocks))]
+    out = []
+    for seg in layout:
+        if seg["kind"] == "cols":
+            left = "".join(render_block(blocks[i], ctx, "col") for i in seg["left"])
+            right = "".join(render_block(blocks[i], ctx, "col") for i in seg["right"])
+            out.append(f'<div class="segment cols"><div class="col col-left">{left}</div><div class="col col-right">{right}</div></div>')
+        else:
+            out.append(f'<div class="segment wide">{render_block(blocks[seg["index"]], ctx, "single")}</div>')
+    return f'<div class="column-text two">{"".join(out)}</div>'
+
+
 def page_mode(page: dict[str, Any], ctx: RenderContext) -> str:
-    """'split-right' | 'split-left' | 'single' for a content page."""
+    """'two' | 'split-right' | 'split-left' | 'single' for a content page."""
     ov = ctx.layout.page_override(page["id"])
     columns = ov.get("columns", ctx.metrics.columns)
+    if columns == "two":
+        return "two"
     if columns == "single" or first_figure(page) is None:
         return "single"
     side = ov.get("figureSide", ctx.metrics.figure_side)
@@ -226,9 +247,18 @@ def _head(ctx: RenderContext, title: str, needs_mermaid: bool, needs_fa: bool, o
     if needs_fa:
         parts.append(assets.fontawesome_style_tag())
     if needs_mermaid:
-        parts.append(assets.mermaid_script_tag(lib_mode, out_dir))
+        parts.append(assets.mermaid_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
     parts.append("</head>")
     return "\n".join(parts)
+
+
+def _effective_layout(layout) -> dict[str, Any]:
+    """Layout JSON to embed: pins the Mermaid version actually used, so that a
+    later `build out.html` renders with the same version (figure sizes, and
+    therefore pagination, depend on it)."""
+    out = layout_to_dict(layout)
+    out["mermaidVersion"] = assets.resolve_mermaid_version(layout.mermaid_version)
+    return out
 
 
 def _needs(blocks: list[dict[str, Any]]) -> tuple[bool, bool]:
@@ -260,7 +290,7 @@ def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: Rende
         embedded["meta"]["source"] = os.path.relpath(md_path, ctx.html_dir.resolve()).replace(os.sep, "/")
     body.append(f'<script type="application/json" id="{CONTENT_SCRIPT_ID}">\n' + embed_json(embedded) + "\n</script>")
     body.append(f'<script type="application/json" id="{LAYOUT_SCRIPT_ID}">\n'
-                + embed_json(layout_to_dict(ctx.layout)) + "\n</script>")
+                + embed_json(_effective_layout(ctx.layout)) + "\n</script>")
     total = len(pages)
     for i, page in enumerate(pages, start=1):
         body.append(render_page(page, ctx, i, total, title, date_text))
@@ -277,7 +307,9 @@ def render_measure_document(blocks: list[dict[str, Any]], ctx: RenderContext) ->
     head = _head(ctx, "measure", needs_mermaid, needs_fa, None)
     body = ["<body>"]
     widths: list[tuple[str, float, str]] = []
-    if m.columns == "split":
+    if m.columns == "two":
+        widths.append(("col", m.col2_px, "col"))
+    elif m.columns == "split":
         widths.append(("col", m.text_col_px, "split"))
     widths.append(("single", m.content_w_px, "single"))
     for name, width, fig_mode in widths:

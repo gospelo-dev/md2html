@@ -82,6 +82,8 @@ def strip_runtime_ids(doc: dict[str, Any]) -> dict[str, Any]:
     """Block ids are computed at load time; do not persist the generated ones."""
     copy = json.loads(json.dumps(doc, ensure_ascii=False))
     for page in copy["pages"]:
+        for key in [k for k in page if k.startswith("_")]:
+            page.pop(key)  # runtime-only data such as the two-column placement (_layout)
         for block in page["blocks"]:
             if block.get("_generated_id"):
                 block.pop("id", None)
@@ -198,6 +200,8 @@ def _validate_block(block: Any, loc: str, page_kind: str) -> None:
 def _validate_items(items: Any, loc: str) -> None:
     if not isinstance(items, list):
         raise ContentError(f"{loc}.items must be an array")
+    if not items:
+        raise ContentError(f"{loc}.items must not be empty")
     for i, item in enumerate(items):
         if not isinstance(item, dict) or not isinstance(item.get("text"), str):
             raise ContentError(f"{loc}.items[{i}] must be an object with a text string")

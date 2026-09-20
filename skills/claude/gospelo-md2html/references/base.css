@@ -38,6 +38,12 @@ body {
 .column-figure { display: flex; align-items: center; justify-content: center; min-width: 0; height: 100%; overflow: hidden; }
 .split-left .column-figure { order: -1; }
 
+/* two-column flow (N order): segments stack vertically; a cols segment is a 2-column grid, a wide segment spans */
+.page-body.two { grid-template-columns: 1fr; }
+.column-text.two > .segment.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--gutter); align-items: start; }
+.column-text.two > .segment.cols > .col { min-width: 0; }
+.column-text.two > .segment.wide { min-width: 0; }
+
 .page-footer {
   position: absolute; left: var(--margin-h); right: var(--margin-h); bottom: 0; height: var(--margin-v);
   font-size: var(--footer-size); line-height: 1.4; color: #888;

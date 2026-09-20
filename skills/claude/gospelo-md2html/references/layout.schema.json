@@ -8,11 +8,12 @@
     "fontSize": { "type": "string", "pattern": "^[0-9.]+(pt|px|mm)$" },
     "titleScale": { "type": "number", "exclusiveMinimum": 0 },
     "headerTitle": { "type": "string", "description": "section | doc | fixed:<text>" },
-    "columns": { "enum": ["split", "single"] },
+    "columns": { "enum": ["two", "split", "single"] },
     "figureSide": { "enum": ["left", "right"] },
     "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
     "details": { "enum": ["drop", "expand"] },
     "mermaidLib": { "enum": ["embed", "link"] },
+    "mermaidVersion": { "type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "vendored Mermaid version to render with; null = newest vendored. Generated HTML records the effective version" },
     "hrBreak": { "type": "boolean" },
     "imageScale": { "type": "number", "exclusiveMinimum": 0 },
     "embedImages": { "type": "boolean" },
@@ -24,10 +25,11 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "columns": { "enum": ["split", "single"] },
+          "columns": { "enum": ["two", "split", "single"] },
           "figureSide": { "enum": ["left", "right"] },
           "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
-          "maxHeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+          "maxHeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+          "span": { "enum": [1, 2], "description": "two-column pages: 1 = keep the block in a column, 2 = full-width band" }
         }
       }
     }

@@ -113,10 +113,19 @@ class Metrics:
     def figure_col_px(self) -> float:
         return (self.content_w_px - self.gutter_px) * (1.0 - self.split_ratio)
 
+    @property
+    def col2_px(self) -> float:
+        """Width of one column in the two-column (N order) layout."""
+        return (self.content_w_px - self.gutter_px) / 2.0
+
     def figure_box(self, mode: str, ratio_override: float | None = None) -> tuple[float, float, float]:
-        """(W, H, r) for figure sizing in the given page mode ('split' or 'single')."""
+        """(W, H, r) for figure sizing in the given page mode ('split', 'col' or 'single')."""
+        # a figure that fills a column must still fit the pagination capacity (content height x SAFETY)
+        usable_h = self.content_h_px * SAFETY - 1.0
         if mode == "split":
-            return self.figure_col_px, self.content_h_px, IMAGE_RATIO_SPLIT
+            return self.figure_col_px, usable_h, IMAGE_RATIO_SPLIT
+        if mode == "col":
+            return self.col2_px, usable_h, IMAGE_RATIO_SPLIT
         r = IMAGE_RATIO_SINGLE if ratio_override is None else ratio_override
         return self.content_w_px, self.content_h_px, r
 
@@ -150,8 +159,8 @@ def build_metrics(fmt: PageFormat, font_size: str | None, title_scale: float,
     F = parse_font_size(font_size) if font_size else fmt.default_font_pt * PT_TO_PX
     if columns is None:
         columns = fmt.default_columns
-    if columns not in ("split", "single"):
-        raise ValueError(f"invalid columns {columns!r}: expected split or single")
+    if columns not in ("two", "split", "single"):
+        raise ValueError(f"invalid columns {columns!r}: expected two, split or single")
     if figure_side not in ("left", "right"):
         raise ValueError(f"invalid figure side {figure_side!r}: expected left or right")
     if not (0.4 <= split_ratio <= 0.6):

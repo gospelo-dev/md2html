@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import itertools
 import os
 import shutil
 import subprocess
@@ -40,6 +41,7 @@ EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_NOT_CONVERGED = 2
 MAX_VERIFY_ROUNDS = 3
+_verify_split_counter = itertools.count(1)  # unique ids for blocks split by the verify pass
 
 
 class CliError(Exception):
@@ -57,11 +59,15 @@ def _add_layout_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--font-size", dest="font_size", help="body font size: 11pt / 14px / 3.5mm")
     g.add_argument("--title-scale", dest="title_scale", type=float)
     g.add_argument("--header-title", dest="header_title", help="section | doc | fixed:<text>")
-    g.add_argument("--columns", choices=["split", "single"])
+    g.add_argument("--columns", choices=["two", "split", "single"],
+                   help="two = N-order two columns (default on landscape paper), split = one figure beside the text, single")
     g.add_argument("--figure-side", dest="figure_side", choices=["left", "right"])
     g.add_argument("--split-ratio", dest="split_ratio", type=float)
     g.add_argument("--details", choices=["drop", "expand"])
     g.add_argument("--mermaid-lib", dest="mermaid_lib", choices=["embed", "link"])
+    g.add_argument("--mermaid-version", dest="mermaid_version", metavar="X.Y.Z",
+                   help="vendored Mermaid version to render with (default: the version recorded in an "
+                        "input HTML, else the newest vendored)")
     g.add_argument("--hr-break", dest="hr_break", action="store_const", const=True)
     g.add_argument("--image-scale", dest="image_scale", type=float)
     g.add_argument("--embed-images", dest="embed_images", action="store_const", const=True)
@@ -111,7 +117,7 @@ def layout_from_args(args: argparse.Namespace, base: dict[str, Any] | None = Non
         "page": args.page, "font_size": args.font_size, "title_scale": args.title_scale,
         "header_title": args.header_title, "columns": args.columns, "figure_side": args.figure_side,
         "split_ratio": args.split_ratio, "details": args.details, "mermaid_lib": args.mermaid_lib,
-        "hr_break": args.hr_break, "image_scale": args.image_scale, "embed_images": args.embed_images,
+        "mermaid_version": args.mermaid_version, "hr_break": args.hr_break, "image_scale": args.image_scale, "embed_images": args.embed_images,
         "date": args.date, "css": args.css,
     }
     return build_layout(args.layout, cli, base)
@@ -161,11 +167,16 @@ def measure_heights(browser: Browser, blocks: list[dict[str, Any]], ctx: RenderC
     return col, single
 
 
-def make_paginate_ctx(metrics: Metrics, columns: str, heights_col, heights_single, doc_title: str) -> PaginateContext:
-    heights = heights_col if columns == "split" else heights_single
+def make_paginate_ctx(metrics: Metrics, columns: str, heights_col, heights_single, doc_title: str,
+                      layout: Layout | None = None) -> PaginateContext:
+    heights = heights_col if columns in ("split", "two") else heights_single
+    col_w, col_h, col_r = metrics.figure_box("col")
+    band_w, band_h, band_r = metrics.figure_box("single")
     return PaginateContext(
         is_slide=metrics.fmt.is_slide, columns=columns, capacity=metrics.content_h_px * SAFETY,
         line_px=metrics.line_px, heights=dict(heights), heights_single=dict(heights_single), doc_title=doc_title,
+        span_override=layout.span_overrides() if layout else {},
+        col_box=(col_w, col_h * col_r), band_box=(band_w, band_h * band_r),
     )
 
 
@@ -175,8 +186,11 @@ def assign_page_ids(pages: list[dict[str, Any]], start: int = 1) -> None:
 
 
 def verify_and_fix(browser: Browser, doc: dict[str, Any], pages: list[dict[str, Any]], ctx: RenderContext,
-                   date: str | None, work_dir: Path, verbose: bool) -> tuple[str, list[dict[str, Any]], int]:
-    """Render, verify, and push overflowing tail blocks to continuation pages. Returns (html, verify, rounds)."""
+                   date: str | None, work_dir: Path, verbose: bool,
+                   relayout=None) -> tuple[str, list[dict[str, Any]], int, list[dict[str, Any]]]:
+    """Render, verify, and push overflowing tail blocks to continuation pages.
+    Returns (html, verify, rounds, pages) where `pages` is the final page list the HTML was rendered from.
+    `relayout(pages)` recomputes the two-column placement of pages changed by a push."""
     rounds = 0
     while True:
         html_text = render_document(doc, pages, ctx, date)
@@ -190,7 +204,7 @@ def verify_and_fix(browser: Browser, doc: dict[str, Any], pages: list[dict[str, 
                 path.unlink(missing_ok=True)
         overflowing = [v for v in verify if v["overflowPx"] > 0 and v["mode"] != "cover"]
         if not overflowing:
-            return html_text, verify, rounds
+            return html_text, verify, rounds, pages
         rounds += 1
         if verbose:
             for v in overflowing:
@@ -202,6 +216,8 @@ def verify_and_fix(browser: Browser, doc: dict[str, Any], pages: list[dict[str, 
             ids = ", ".join(v["id"] for v in overflowing)
             raise CliError(f"verification did not converge after {MAX_VERIFY_ROUNDS} rounds; overflowing pages: {ids}")
         pages = _push_last_blocks(pages, {v["id"]: v for v in overflowing})
+        if relayout is not None:
+            pages = relayout(pages)
 
 
 def _push_last_blocks(pages: list[dict[str, Any]], overflowing: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -215,7 +231,8 @@ def _push_last_blocks(pages: list[dict[str, Any]], overflowing: dict[str, dict[s
         if v is None:
             out.append(page)
             continue
-        fig = first_figure(page)
+        # only the figure-slot layout keeps a figure out of the flow; in single / two-column modes every block moves
+        fig = first_figure(page) if str(v.get("mode", "")).startswith("split") else None
         text_blocks = [b for b in page["blocks"] if b is not fig]
         if not text_blocks:
             out.append(page)
@@ -238,7 +255,9 @@ def _push_last_blocks(pages: list[dict[str, Any]], overflowing: dict[str, dict[s
             n += 1
         new_id = f"{page['id']}-{n}"
         existing.add(new_id)
-        out.append(dict(page, blocks=keep))
+        shrunk = dict(page, blocks=keep)
+        shrunk.pop("_layout", None)  # placement is recomputed by relayout()
+        out.append(shrunk)
         out.append({"id": new_id, "kind": "content", "title": page["title"], "continued": page["title"] is not None,
                     "blocks": [moved]})
     return out
@@ -250,7 +269,7 @@ def _split_by_verify(block: dict[str, Any], v: dict[str, Any]) -> tuple[dict[str
         return None
     overflow = v["overflowPx"] + 1
     t = block["type"]
-    tail_id = f"{block['id']}.2"
+    tail_id = f"{block['id']}.v{next(_verify_split_counter)}"
     if t == "table" and info.get("rowHeightsPx") and len(block["rows"]) > 1:
         heights = info["rowHeightsPx"]
         cut = len(heights)
@@ -344,29 +363,36 @@ def cmd_import(args: argparse.Namespace) -> int:
         heights_col, heights_single = measure_heights(browser, block_list, measure_ctx, work_dir)
         if args.verbose:
             print_verbose_heights(heights_col)
-        pctx = make_paginate_ctx(metrics, metrics.columns, heights_col, heights_single, title)
+        pctx = make_paginate_ctx(metrics, metrics.columns, heights_col, heights_single, title, layout)
         pages = [p.to_json() for p in paginate(block_list, pctx)]
         assign_page_ids(pages)
-        for p in pages:
-            for b in p["blocks"]:
-                b.pop("id", None)
+        _drop_runtime_keys(pages)
         doc["pages"].extend(pages)
         content_mod.validate_content(doc, str(out_path))
         content_mod.assign_block_ids(doc)
+        # Settle: the same measure / spill / verify pass that `build` runs. The first pass placed
+        # split blocks (table rows, list items) by estimated heights; this pass measures them as
+        # they really render, so a later `build` of the written JSON does not move anything.
+        pages, _, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose)
         final_ctx = RenderContext(metrics, layout, image_base, work_dir, layout.embed_images)
-        html_text, verify, rounds = verify_and_fix(browser, doc, content_mod.content_pages(doc), final_ctx, date, work_dir, args.verbose)
-    # verify_and_fix may have pushed blocks to new pages: take its page order and renumber sequentially
-    final_pages = _replay_push(content_mod.content_pages(doc), verify)
+        _, verify, rounds, final_pages = verify_and_fix(browser, doc, pages, final_ctx, date, work_dir, args.verbose, relayout)
+    # spills and pushes add pages such as p09-2: renumber sequentially
+    old_ids = [[b.get("id") for b in p["blocks"]] for p in final_pages]
     assign_page_ids(final_pages)
-    for p in final_pages:
-        for b in p["blocks"]:
-            b.pop("id", None)
-            b.pop("_generated_id", None)
+    _drop_runtime_keys(final_pages)
     doc["pages"] = [doc["pages"][0]] + final_pages
     content_mod.assign_block_ids(doc)
+    # settle-pass ids (p09-2-b0) -> final page-based ids (p10-b0) in the report and warnings
+    id_map = {old: b["id"] for p, olds in zip(final_pages, old_ids) for b, old in zip(p["blocks"], olds) if old}
     for v, p in zip(verify, final_pages):
         v["id"] = p["id"]
-    report = report_mod.build_report(metrics, metrics.columns, verify, [], pctx.warnings, _notes_dict(notes))
+        for b in v["blocks"]:
+            b["id"] = id_map.get(b["id"], b["id"])
+        if v.get("figure"):
+            v["figure"]["id"] = id_map.get(v["figure"]["id"], v["figure"]["id"])
+    # the settle pass re-paginates every page, so it repeats the first pass's warnings with page-based ids
+    warnings = [_remap_ids(w, id_map) for w in warnings]
+    report = report_mod.build_report(metrics, metrics.columns, verify, [], warnings, _notes_dict(notes))
     report["verifyRounds"] = rounds
     report_mod.print_summary(report, "import (dry-run)" if args.dry_run else "import")
     if args.report:
@@ -377,6 +403,21 @@ def cmd_import(args: argparse.Namespace) -> int:
     content_mod.save_content(doc, out_path)
     print(f"wrote {out_path}")
     return EXIT_OK
+
+
+def _drop_runtime_keys(pages: list[dict[str, Any]]) -> None:
+    """Remove pagination-time block ids and page placement so ids can be reassigned."""
+    for p in pages:
+        for key in [k for k in p if k.startswith("_")]:
+            p.pop(key)
+        for b in p["blocks"]:
+            b.pop("id", None)
+            b.pop("_generated_id", None)
+
+
+def _remap_ids(text: str, id_map: dict[str, str]) -> str:
+    import re
+    return re.sub(r"\b(?:p\d+(?:-\d+)*-)?b\d+(?:\.[sv]?\d+)*\b", lambda m: id_map.get(m.group(0), m.group(0)), text)
 
 
 def _notes_dict(notes: blocks_mod.ImportNotes) -> dict[str, Any]:
@@ -415,15 +456,40 @@ def _build_pages(browser: Browser, doc, layout: Layout, metrics: Metrics, image_
 
     def columns_for_page(page: dict[str, Any]) -> str:
         mode = page_mode(page, render_ctx_probe)
+        if mode == "two":
+            return "two"
         return "single" if mode == "single" else "split"
 
     def make_ctx(columns: str) -> PaginateContext:
-        ctx = make_paginate_ctx(metrics, columns, heights_col, heights_single, doc["meta"]["title"])
+        ctx = make_paginate_ctx(metrics, columns, heights_col, heights_single, doc["meta"]["title"], layout)
         ctx.warnings = warnings
         return ctx
 
     new_pages, spills = spill_pages(pages, make_ctx, columns_for_page)
-    return new_pages, spills, warnings
+
+    def relayout(current: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        # pages created by the verify pass (pushed blocks) have no two-column placement yet
+        # blocks split by the verify pass (ids ending in .2) have no measured height; such pages
+        # keep the full-width fallback rendering instead of being re-laid out
+        todo = [p for p in current if p["kind"] == "content" and "_layout" not in p and columns_for_page(p) == "two"
+                and all(b["id"] in heights_col for b in p["blocks"])]
+        if not todo:
+            return current
+        fixed, _ = spill_pages(todo, make_ctx, columns_for_page, existing_ids={p["id"] for p in current})
+        by_id = {p["id"]: p for p in fixed}
+        out: list[dict[str, Any]] = []
+        for p in current:
+            if p["id"] in by_id:
+                out.append(by_id.pop(p["id"]))
+                # continuation pages produced for this page follow it in `fixed`
+                for extra in fixed:
+                    if extra["id"].startswith(p["id"] + "-") and extra["id"] in by_id:
+                        out.append(by_id.pop(extra["id"]))
+            else:
+                out.append(p)
+        return out
+
+    return new_pages, spills, warnings, relayout
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -431,9 +497,9 @@ def cmd_check(args: argparse.Namespace) -> int:
     work_dir = content_path.resolve().parent
     date = date_text(layout, doc["meta"].get("date"))
     with Browser() as browser:
-        pages, spills, warnings = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose)
+        pages, spills, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose)
         final_ctx = RenderContext(metrics, layout, image_base, work_dir, layout.embed_images)
-        _, verify, rounds = verify_and_fix(browser, doc, pages, final_ctx, date, work_dir, args.verbose)
+        _, verify, rounds, _ = verify_and_fix(browser, doc, pages, final_ctx, date, work_dir, args.verbose, relayout)
     report = report_mod.build_report(metrics, metrics.columns, verify, [s.__dict__ | {"from": s.source, "to": s.target} for s in spills], warnings)
     report["verifyRounds"] = rounds
     _fix_spill_keys(report)
@@ -465,24 +531,19 @@ def cmd_build(args: argparse.Namespace) -> int:
             print(f"  warning: {w}")
 
     with Browser() as browser:
-        pages, spills, warnings = _build_pages(browser, doc, layout, metrics, image_base, out_dir, args.verbose)
+        pages, spills, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, out_dir, args.verbose)
         final_ctx = RenderContext(metrics, layout, image_base, out_dir, layout.embed_images)
-        html_text, verify, rounds = verify_and_fix(browser, doc, pages, final_ctx, date, out_dir, args.verbose)
+        html_text, verify, rounds, final_pages = verify_and_fix(browser, doc, pages, final_ctx, date, out_dir, args.verbose, relayout)
         out_path.write_text(html_text, encoding="utf-8")
         print(f"wrote {out_path}")
         if args.pdf:
             browser.export_pdf(out_path, args.pdf)
             print(f"wrote {args.pdf}")
 
-    # pages after verify may contain pushed continuation pages; rebuild from verify order
-    by_id = {p["id"]: p for p in pages}
-    final_pages = [by_id[v["id"]] for v in verify if v["id"] in by_id]
-    pushed = [v["id"] for v in verify if v["id"] not in by_id]
-    if pushed:
-        # verify_and_fix created pages we do not hold here; rebuild by re-deriving from html is not possible,
-        # so re-run the push logic deterministically to obtain the same page objects.
-        final_pages = _replay_push(pages, verify)
-    changed = bool(spills) or bool(pushed)
+    # final_pages is the page list the HTML was rendered from (including pages the verify pass pushed)
+    before = {p["id"] for p in pages}
+    pushed = [p["id"] for p in final_pages if p["id"] not in before]
+    changed = bool(spills) or bool(pushed) or rounds > 0
     if changed and not args.no_write_back:
         if from_html:
             # the rebuilt HTML already embeds the updated pages; there is no separate JSON to write
@@ -500,28 +561,6 @@ def cmd_build(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _replay_push(pages: list[dict[str, Any]], verify: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Reconstruct the page list produced inside verify_and_fix from the verify result."""
-    by_id = {p["id"]: p for p in pages}
-    block_index: dict[str, dict[str, Any]] = {}
-    for p in pages:
-        for b in p["blocks"]:
-            block_index[b["id"]] = b
-    out = []
-    for v in verify:
-        if v["id"] in by_id:
-            src = by_id[v["id"]]
-            ids = {b["id"] for b in v["blocks"]} | ({v["figure"]["id"]} if v.get("figure") else set())
-            out.append(dict(src, blocks=[b for b in src["blocks"] if b["id"] in ids]))
-        else:
-            base = v["id"].rsplit("-", 1)[0]
-            src = by_id.get(base) or next((p for p in pages if v["id"].startswith(p["id"])), None)
-            ids = [b["id"] for b in v["blocks"]] + ([v["figure"]["id"]] if v.get("figure") else [])
-            out.append({"id": v["id"], "kind": "content", "title": src["title"] if src else None,
-                        "continued": bool(src and src["title"]), "blocks": [block_index[i] for i in ids if i in block_index]})
-    return out
-
-
 def _reflow_doc(doc, layout: Layout, metrics: Metrics, image_base: Path, work_dir: Path) -> tuple[dict[str, Any], list[str]]:
     """Re-paginate every block from scratch. Returns (doc with new pages, warnings)."""
     flat = flatten_for_reflow(doc["pages"])
@@ -530,7 +569,7 @@ def _reflow_doc(doc, layout: Layout, metrics: Metrics, image_base: Path, work_di
     measure_ctx = RenderContext(metrics, layout, image_base, None)
     with Browser() as browser:
         heights_col, heights_single = measure_heights(browser, flat, measure_ctx, work_dir)
-        pctx = make_paginate_ctx(metrics, metrics.columns, heights_col, heights_single, doc["meta"]["title"])
+        pctx = make_paginate_ctx(metrics, metrics.columns, heights_col, heights_single, doc["meta"]["title"], layout)
         pages = [p.to_json() for p in paginate(flat, pctx)]
     assign_page_ids(pages)
     for p in pages:

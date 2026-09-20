@@ -159,11 +159,16 @@ _VERIFY_JS = r"""
   let usedPx = 0, contentH = 0;
   if (col) {
     contentH = col.clientHeight;
-    const kids = Array.from(col.children);
-    if (kids.length) {
-      const last = kids[kids.length - 1];
-      usedPx = last.getBoundingClientRect().bottom - col.getBoundingClientRect().top + (parseFloat(getComputedStyle(last).marginBottom) || 0);
-    }
+    const top = col.getBoundingClientRect().top;
+    // deepest visible bottom edge among the column's children (a two-column segment is as tall as
+    // its taller column). The last block's bottom margin is not counted: it is invisible, and
+    // pagination already reserves it, so counting it here reported overflow for pages that fit.
+    const bottoms = Array.from(col.children).map(k => {
+      const kids = k.classList.contains('segment') ? Array.from(k.querySelectorAll('[data-block]')) : [k];
+      if (!kids.length) { return 0; }
+      return Math.max(...kids.map(b => b.getBoundingClientRect().bottom - top));
+    });
+    usedPx = bottoms.length ? Math.max(...bottoms) : 0;
   }
   let figure = null, figureOverflowPx = 0;
   if (figCol) {
@@ -177,7 +182,7 @@ _VERIFY_JS = r"""
     overflowPx: Math.max(0, Math.round(usedPx - contentH)),
     figureOverflowPx: Math.round(figureOverflowPx),
     titleTruncated: title ? title.scrollWidth > title.clientWidth + 1 : false,
-    blocks: col ? Array.from(col.querySelectorAll(':scope > [data-block]')).map(blockInfo) : [],
+    blocks: col ? Array.from(col.querySelectorAll('[data-block]')).map(blockInfo) : [],
     figure
   };
 })

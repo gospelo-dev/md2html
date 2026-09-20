@@ -67,6 +67,11 @@ uv run $S restore content.json|out.html -o original.md
 文字サイズの既定は A4 11pt、A3 12pt、スライド 14pt。用紙と文字サイズは `import`
 にも渡す (ページ割りに使う)。`build` で変えるときは `--reflow`。
 
+段組 (`--columns`): 横長の用紙は既定で 2 段 (`two`: 左段の上から下へ、次に右段へ流す
+N 順。列数 4 以上の表、コード、横長の図は幅いっぱいの帯)、縦長は単段 (`single`)。
+`split` は図 1 枚をテキストの隣に置く形式。ページやブロック単位の変更はレイアウト JSON の
+`overrides` (`columns`、`span`)。
+
 レイアウトの詳細は `references/page_formats.md`、ページ区切りの規則は
 `references/layout_rules.md`、JSON の形は `references/content.schema.json` と
 `references/layout.schema.json`。
@@ -75,7 +80,7 @@ uv run $S restore content.json|out.html -o original.md
 
 | 警告 | 対処 |
 | --- | --- |
-| figure scaled to < 0.5 | 図が横長すぎる。そのページを `overrides` で単段にするか、Mermaid の `direction` を `TB` にするか、図を分ける |
+| figure scaled to < 0.5 | 図が段に対して大きすぎる。2 段ではそのブロックを `overrides` で `span: 2` (帯) にするか、Mermaid の `direction` を変えるか、図を分ける。`split` ならそのページを `columns: single` にする |
 | header title truncated | h2 が長い。h2 を短くするか `--header-title fixed:<text>` |
 | block ... taller than a page | 1 ブロックがページに入らない (表の 1 行が巨大など)。内容の構造を見直す提案をする |
 | droppedDetails | `<details>` を捨てた。本文として必要なら `--details expand` |

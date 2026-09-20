@@ -10,13 +10,13 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 
 一般的な Markdown から PDF への変換は、ブラウザの印刷エンジンに文章を流し込むだけです。見出しがページ末尾に取り残され、表が任意の位置で切れ、図は縮みすぎるかはみ出し、HTML ができた後は 1 ページだけを直すこともできません。このスキルは次の 3 点を軸にしています。
 
-1. **レイアウトを考慮したページ分割。** `import` が全ブロックをヘッドレス Chromium で描画して実寸の高さを取り、組版の規則 (見出しは本文と同じページに、表は行境界で分割してヘッダーを繰り返す、横長の用紙では 1 ページ 1 図をテキストの隣に) で 16:9 / 4:3 のスライドや A4 / A3 の文書に割り付けます。
+1. **レイアウトを考慮したページ分割。** `import` が全ブロックをヘッドレス Chromium で描画して実寸の高さを取り、組版の規則 (見出しは本文と同じページに、表は行境界で分割してヘッダーを繰り返す、横長の用紙では 2 段に流す) で 16:9 / 4:3 のスライドや A4 / A3 の文書に割り付けます。
 2. **AI で編集できる。** 内容は **コンテンツ JSON** (1 ページ 1 オブジェクト、本文はインライン Markdown、表は `header` + `rows`、Mermaid はソース文字列) として持ち、生成 HTML にも埋め込まれます。エージェントは JSON の該当ページを直して `build` するだけで、HTML 1 ファイルを受け取った場合でも同じことができます。収まらなくなった分は同じタイトルの続きページへ自動で送られ、JSON と出力は常に一致します。
 3. **原文を保持する。** 取り込み時点の Markdown を JSON と HTML の中にそのまま保持し、`restore` でいつでも取り出せます。編集をやり直したいときは原文から `import` し直せます。
 
 レイアウトはコンテンツに含めません。用紙、余白、文字階層、段の分割、図の側は CLI オプションか別のレイアウト JSON で与えます。Mermaid は HTML に同梱した Mermaid.js がブラウザで描画するので、最終ファイルまで図が編集可能なままです。
 
-はじめての方は [クイックスタート](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md) ([English](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md)) を参照してください。
+はじめての方は [クイックスタート](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md) ([English](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md)) を参照してください。レイアウトの根拠 (文字サイズからの導出、余白、段組、図の配置) は [docs/design/design_theory.md](https://github.com/gospelo-dev/md2html/blob/main/docs/design/design_theory.md) にまとめてあり、この資料自体を本スキルで 16:9 のスライドにしています。
 
 ## できること
 
@@ -25,7 +25,7 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 | 用紙 | `a4`、`a4-landscape`、`a3`、`a3-landscape` (文書) と `16x9`、`4x3` (スライド) |
 | 文字サイズ 1 つで組版 | 見出し、表、コード、余白、フッターの大きさは全て `--font-size` から導出 |
 | スライド | h2 ごとに 1 枚。見出しはヘッダー帯に本文の 1.25 倍で表示し、続きスライドに「(続き)」を付ける |
-| 左右分割 | 横長の用紙では図 1 枚をテキストの隣に置く。図の無いページは単段に戻る |
+| 2 段組 | 横長の用紙ではブロックを左段の上から下へ、次に右段へ流す (N 順)。列数の多い表、コード、横長の図は幅いっぱいの帯になる。縦長の用紙は単段。図 1 枚をテキストの隣に置く `split` も選べる |
 | 実測 | 高さは Chromium (Playwright) で実測し、推定しない。検証パスが全ページのはみ出しを確認する |
 | 編集可能なコンテンツ | ページ単位の JSON。表の行、リスト項目、Mermaid ソースは素のデータ |
 | 自動送り | 編集で収まらなくなった分は「(続き)」ページへ移す。内容を削ったり押し込んだりしない |
@@ -108,16 +108,16 @@ uv run $S build out/handover.html --pdf out/handover.pdf
   "page": "16x9",
   "fontSize": "14pt",
   "titleScale": 1.25,
-  "columns": "split",
-  "figureSide": "right",
+  "columns": "two",
   "overrides": {
     "p07": { "columns": "single" },
+    "p08-b1": { "span": 2 },
     "p09-b0": { "maxHeightRatio": 0.7 }
   }
 }
 ```
 
-`--layout layout.json` で渡し、CLI オプションが優先されます。`overrides` はページやブロック単位の調整 (例: 図が横長で左右分割に向かないページを単段にする) に使います。
+`--layout layout.json` で渡し、CLI オプションが優先されます。`overrides` はページやブロック単位の調整に使います: ページを単段にする、ブロックを幅いっぱいの帯にする (`span: 2`) か段に収める (`span: 1`)、図の高さ上限を変える、など。
 
 ### オプション
 
@@ -127,11 +127,12 @@ uv run $S build out/handover.html --pdf out/handover.pdf
 | `--font-size` | A4 11pt、A3 12pt、スライド 14pt | 本文サイズ (`pt`、`px`、`mm`)。他の寸法は全てここから導出 |
 | `--title-scale` | `1.25` | スライドのヘッダータイトルの本文比 |
 | `--header-title` | `section` | `section` (直近の h2)、`doc` (文書の h1)、`fixed:<text>` |
-| `--columns` | 横長 `split`、縦長 `single` | 基本レイアウト |
-| `--figure-side` | `right` | 左右分割で図を置く側 |
-| `--split-ratio` | `0.5` | テキスト段の比率 (0.4 〜 0.6) |
+| `--columns` | 横長 `two`、縦長 `single` | `two` (N 順の 2 段。幅いっぱいの帯あり)、`split` (図 1 枚をテキストの隣に)、`single` (単段) |
+| `--figure-side` | `right` | `split` で図を置く側 |
+| `--split-ratio` | `0.5` | `split` のテキスト段の比率 (0.4 〜 0.6) |
 | `--details` | `drop` | `<details>` の扱い。中身が Mermaid ソースなら常に救出する |
-| `--mermaid-lib` | `embed` | Mermaid.js を HTML に埋め込む (単一ファイル、約 3MB) か、隣のファイルとして `link` する |
+| `--mermaid-lib` | `embed` | Mermaid.js を HTML に埋め込む (単一ファイル、約 3MB) か、隣の `mermaid-<version>.min.js` として `link` する |
+| `--mermaid-version` | 同梱の最新版 | 描画に使う同梱 Mermaid の版 (`X.Y.Z`)。生成 HTML はページ割りに使った版を記録し、再生成時も同じ版を使う。版の追加方法は `THIRD_PARTY_NOTICES.md` を参照 |
 | `--hr-break` | off | スライド形式で `---` を改ページとして扱う |
 | `--embed-images` | off | 画像を data URI で埋め込む |
 | `--date` | 当日 | フッターの日付。`none` で非表示 |

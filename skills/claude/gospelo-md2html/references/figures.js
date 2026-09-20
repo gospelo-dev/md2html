@@ -46,7 +46,12 @@
         iw = el.naturalWidth / imageScale; ih = el.naturalHeight / imageScale;
       }
       if (!(iw > 0 && ih > 0)) { throw new Error("no intrinsic size: " + (fig.dataset.block || "")); }
-      var s = Math.min(1, W / iw, (H * r) / ih);
+      // the figure's own vertical margins and caption must fit inside the box too
+      var fcs = getComputedStyle(fig);
+      var extra = (parseFloat(fcs.marginTop) || 0) + (parseFloat(fcs.marginBottom) || 0);
+      var cap = fig.querySelector("figcaption");
+      if (cap) { extra += cap.getBoundingClientRect().height + (parseFloat(getComputedStyle(cap).marginTop) || 0); }
+      var s = Math.min(1, W / iw, Math.max(1, H * r - extra) / ih);
       var w = Math.round(iw * s), h = Math.round(ih * s);
       el.setAttribute("width", String(w));
       el.setAttribute("height", String(h));

@@ -5,6 +5,8 @@ docs/07_content_model.md section 5.1). Pure functions over measured heights.
 from __future__ import annotations
 
 import copy
+import itertools
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -32,6 +34,12 @@ class BlockHeight:
     lines: list[float] | None = None
     padding: float = 0.0
     scale: float | None = None
+    intrinsic_w: float = 0.0
+    intrinsic_h: float = 0.0
+
+    @property
+    def outer(self) -> float:
+        return self.margin_top + self.height + self.margin_bottom
 
     @classmethod
     def from_js(cls, e: dict[str, Any]) -> "BlockHeight":
@@ -39,7 +47,7 @@ class BlockHeight:
             height=float(e["height"]), margin_top=float(e.get("marginTop", 0)), margin_bottom=float(e.get("marginBottom", 0)),
             line_height=e.get("lineHeight"), line_offsets=e.get("lineOffsets"), thead=e.get("thead"),
             rows=e.get("rows"), items=e.get("items"), lines=e.get("lines"), padding=float(e.get("padding", 0)),
-            scale=e.get("scale"),
+            scale=e.get("scale"), intrinsic_w=float(e.get("intrinsicW", 0) or 0), intrinsic_h=float(e.get("intrinsicH", 0) or 0),
         )
 
 
@@ -116,17 +124,23 @@ def _insert_figure(blocks: list[dict[str, Any]], figure: dict[str, Any]) -> list
 @dataclass
 class PaginateContext:
     is_slide: bool
-    columns: str                            # "split" | "single"
+    columns: str                            # "two" | "split" | "single"
     capacity: float                         # content height x SAFETY
     line_px: float
-    heights: dict[str, BlockHeight]         # measured at text-column width
+    heights: dict[str, BlockHeight]         # measured at column width
     heights_single: dict[str, BlockHeight]  # measured at full content width
     doc_title: str
     warnings: list[str] = field(default_factory=list)
+    span_override: dict[str, int] = field(default_factory=dict)  # block id -> 1 | 2 (layout overrides)
+    # figure boxes (width, max height) in px for the two-column layout: a column and a full-width band
+    col_box: tuple[float, float] | None = None
+    band_box: tuple[float, float] | None = None
 
 
 def paginate(blocks: list[dict[str, Any]], ctx: PaginateContext,
              initial_title: str | None = None, initial_continued: bool = False) -> list[Page]:
+    if ctx.columns == "two":
+        return paginate_two_columns(blocks, ctx, initial_title, initial_continued)
     pages: list[Page] = []
     queue: deque[dict[str, Any]] = deque(copy.deepcopy(blocks))
     for i, b in enumerate(queue):
@@ -201,8 +215,9 @@ def paginate(blocks: list[dict[str, Any]], ctx: PaginateContext,
             continue
         if cur.is_empty():
             # Nothing else on the page: accept it if it physically fits (no safety margin), else warn.
+            # the bottom margin is invisible, so it does not count towards clipping
             hard = ctx.capacity / SAFETY
-            if acc.needed(h) > hard:
+            if acc.gap_for(h) + h.height > hard:
                 ctx.warnings.append(f"block {b.get('id')} ({t}) is taller than a page; it will be clipped")
             cur.add(b, h_col, h_single)
             continue
@@ -239,8 +254,9 @@ def _keep_with_next(ctx: PaginateContext, b: dict[str, Any], queue: deque) -> fl
         if nxt["type"] in FIGURE_TYPES:
             if ctx.columns == "split":
                 return 0.0  # the figure goes to the figure slot on this page
-            if nid in ctx.heights_single:
-                h = ctx.heights_single[nid]
+            table = ctx.heights if ctx.columns == "two" else ctx.heights_single
+            if nid in table:
+                h = table[nid]
                 return h.margin_top + h.height + h.margin_bottom  # figures are never split
         elif nid in ctx.heights:
             return min(ctx.heights[nid].height, lines * ctx.line_px)
@@ -251,8 +267,14 @@ def _keep_with_next(ctx: PaginateContext, b: dict[str, Any], queue: deque) -> fl
 # splitting
 # --------------------------------------------------------------------------
 
+_split_counter = itertools.count(1)
+
+
 def _tail_id(b: dict[str, Any]) -> str:
-    return f"{b['id']}.2"
+    """Unique id for the tail of a split block. A plain '.2' suffix collided when the
+    same block was split twice (column boundary, then balancing) and the second tail's
+    heights overwrote the first's."""
+    return f"{b['id']}.s{next(_split_counter)}"
 
 
 def _try_split(ctx: PaginateContext, b: dict[str, Any], h: BlockHeight, remaining: float, page_empty: bool):
@@ -271,6 +293,8 @@ def _try_split(ctx: PaginateContext, b: dict[str, Any], h: BlockHeight, remainin
 
 def _split_table(b, h: BlockHeight, remaining, whole_fits, page_empty):
     rows = h.rows or []
+    if len(rows) != len(b["rows"]):
+        return None  # measured heights do not belong to this block's rows
     if whole_fits and not page_empty:
         return None
     budget = remaining - h.thead - h.margin_bottom
@@ -294,7 +318,7 @@ def _split_table(b, h: BlockHeight, remaining, whole_fits, page_empty):
 
 def _split_code(b, h: BlockHeight, remaining, whole_fits, page_empty):
     lines = h.lines or []
-    if len(lines) < MIN_CODE_LINES_TO_SPLIT:
+    if len(lines) != len(b["lines"]) or len(lines) < MIN_CODE_LINES_TO_SPLIT:
         return None
     budget = remaining - h.padding - h.margin_bottom
     k = 0
@@ -317,6 +341,8 @@ def _split_code(b, h: BlockHeight, remaining, whole_fits, page_empty):
 
 def _split_list(b, h: BlockHeight, remaining, page_empty):
     items = h.items or []
+    if len(items) != len(b["items"]):
+        return None  # measured heights do not belong to this block's items
     budget = remaining - h.margin_bottom
     k = 0
     acc = 0.0
@@ -369,10 +395,13 @@ class Spill:
     blocks: list[str]
 
 
-def spill_pages(pages: list[dict[str, Any]], make_ctx, layout_columns_for_page) -> tuple[list[dict[str, Any]], list[Spill]]:
+def spill_pages(pages: list[dict[str, Any]], make_ctx, layout_columns_for_page,
+                existing_ids: set[str] | None = None) -> tuple[list[dict[str, Any]], list[Spill]]:
     """Re-run pagination per page, keeping page boundaries as the starting
-    point. Returns (new pages, spills)."""
-    existing = {p["id"] for p in pages}
+    point. Returns (new pages, spills). `existing_ids` lists every page id already
+    in use (when only a subset of the document is re-laid out)."""
+    existing = set(existing_ids) if existing_ids else set()
+    existing |= {p["id"] for p in pages}
     out: list[dict[str, Any]] = []
     spills: list[Spill] = []
     for page in pages:
@@ -407,6 +436,319 @@ def _unique_id(base: str, existing: set[str]) -> str:
     while f"{base}-{n}" in existing:
         n += 1
     return f"{base}-{n}"
+
+
+# --------------------------------------------------------------------------
+# two-column flow (docs/04 section 4.7): fill the left column top to bottom,
+# then the right column ("N" reading order). Wide blocks (many-column tables,
+# code, wide figures) become full-width bands; the two-column region above a
+# band is balanced so both columns end at the same height.
+# --------------------------------------------------------------------------
+
+WIDE_TABLE_COLUMNS = 4
+BALANCE_MIN_RATIO = 0.4   # even out the columns only when the region is taller than 40% of the space
+
+
+def _fit_scale(box: tuple[float, float], w: float, h: float) -> float:
+    """Scale at which a w x h figure fits a (width, max height) box, never enlarged."""
+    return min(box[0] / w, box[1] / h, 1.0)
+
+
+@dataclass
+class Region:
+    left: list[dict[str, Any]] = field(default_factory=list)
+    right: list[dict[str, Any]] = field(default_factory=list)
+    left_acc: Accumulator = field(default_factory=Accumulator)
+    right_acc: Accumulator = field(default_factory=Accumulator)
+    left_full: bool = False
+
+    def is_empty(self) -> bool:
+        return not self.left and not self.right
+
+    def height(self) -> float:
+        left = self.left_acc.used + (self.left_acc.last_mb if self.left else 0.0)
+        right = self.right_acc.used + (self.right_acc.last_mb if self.right else 0.0)
+        return max(left, right)
+
+
+@dataclass
+class TwoColPage(Page):
+    segments: list[tuple] = field(default_factory=list)   # ("cols", Region) | ("wide", block, BlockHeight)
+    used_before: float = 0.0                              # height of the closed segments
+    region: Region | None = None
+
+    def is_empty(self) -> bool:
+        return not self.segments and (self.region is None or self.region.is_empty())
+
+    def to_json(self) -> dict[str, Any]:
+        """Blocks are emitted in source order (a floated figure keeps its place in the
+        content); `_layout` records where each block was placed on the page."""
+        segments = list(self.segments)
+        if self.region is not None and not self.region.is_empty():
+            segments.append(("cols", self.region))
+        tagged: list[tuple[dict[str, Any], tuple]] = []
+        for s, seg in enumerate(segments):
+            if seg[0] == "cols":
+                reg: Region = seg[1]
+                tagged.extend((b, ("cols", s, "left")) for b in reg.left)
+                tagged.extend((b, ("cols", s, "right")) for b in reg.right)
+            else:
+                tagged.append((seg[1], ("wide", s)))
+        tagged.sort(key=lambda bt: bt[0].get("_order", float("inf")))
+        # copies without the runtime order key, so that to_json() can be called more than once
+        blocks = [{k: v for k, v in b.items() if k != "_order"} for b, _ in tagged]
+        layout: list[dict[str, Any]] = []
+        for s, seg in enumerate(segments):
+            if seg[0] == "cols":
+                layout.append({"kind": "cols",
+                               "left": [i for i, (_, tag) in enumerate(tagged) if tag == ("cols", s, "left")],
+                               "right": [i for i, (_, tag) in enumerate(tagged) if tag == ("cols", s, "right")]})
+            else:
+                layout.append({"kind": "wide", "index": next(i for i, (_, tag) in enumerate(tagged) if tag == ("wide", s))})
+        return {"id": self.id, "kind": self.kind, "title": self.title, "continued": self.continued,
+                "blocks": blocks, "_layout": layout}
+
+
+def _next_order(order: Any) -> float:
+    """Source-order key for the tail of a split block: after its head, before the next block."""
+    o = float(order) if order is not None else float("inf")
+    if o == float("inf"):
+        return o
+    return o + 0.5 if o == int(o) else o + (math.ceil(o) - o) / 2.0
+
+
+def is_wide(block: dict[str, Any], ctx: PaginateContext, queue: deque | None = None) -> bool:
+    """Whether a block takes the full width in two-column mode."""
+    override = ctx.span_override.get(block.get("id", ""))
+    if override in (1, 2):
+        return override == 2
+    t = block["type"]
+    if t == "heading":
+        # a heading directly followed by a wide block goes above the band
+        if queue and queue[0]["type"] != "heading":
+            return is_wide(queue[0], ctx, None)
+        return False
+    if t == "table":
+        return len(block["header"]) >= WIDE_TABLE_COLUMNS
+    if t in ("code", "html"):
+        return True
+    if t in FIGURE_TYPES:
+        # a figure becomes a band when the band box renders it larger than a column would
+        h = ctx.heights.get(block.get("id", ""))
+        if h and h.intrinsic_w > 0 and h.intrinsic_h > 0:
+            if ctx.col_box is None or ctx.band_box is None:
+                raise ValueError("two-column pagination needs col_box and band_box to place figures")
+            return _fit_scale(ctx.band_box, h.intrinsic_w, h.intrinsic_h) > _fit_scale(ctx.col_box, h.intrinsic_w, h.intrinsic_h)
+        return False
+    return False
+
+
+def paginate_two_columns(blocks: list[dict[str, Any]], ctx: PaginateContext,
+                         initial_title: str | None = None, initial_continued: bool = False) -> list[Page]:
+    pages: list[Page] = []
+    queue: deque[dict[str, Any]] = deque(copy.deepcopy(blocks))
+    for i, b in enumerate(queue):
+        b.setdefault("_order", i)
+    cur = TwoColPage(title=initial_title, continued=initial_continued)
+
+    def close_region(balance: bool) -> None:
+        if cur.region is None:
+            return
+        if cur.region.is_empty():
+            cur.region = None
+            return
+        if balance and cur.region.height() > BALANCE_MIN_RATIO * (ctx.capacity - cur.used_before):
+            _balance_region(cur.region, ctx)
+        cur.segments.append(("cols", cur.region))
+        cur.used_before += cur.region.height()
+        cur.region = None
+
+    def flush(balance: bool = False) -> None:
+        """balance=True when the page ends on a section break (not by overflow):
+        the open two-column region is then evened out so both columns end together."""
+        nonlocal cur
+        close_region(balance=balance)
+        if not cur.is_empty():
+            pages.append(cur)
+
+    def continuation() -> TwoColPage:
+        return TwoColPage(title=cur.title, continued=cur.title is not None or ctx.is_slide)
+
+    def register_tail(head: dict[str, Any], tail: dict[str, Any], tail_h: BlockHeight) -> None:
+        ctx.heights[tail["id"]] = tail_h
+        ctx.heights_single[tail["id"]] = tail_h
+        tail["_order"] = _next_order(head.get("_order"))
+
+    while queue:
+        b = queue.popleft()
+        t = b["type"]
+        if t == "pagebreak":
+            flush(balance=True)
+            cur = TwoColPage(title=cur.title, continued=cur.title is not None)
+            continue
+        if t == "heading" and b["level"] == 1:
+            if ctx.is_slide:
+                flush(balance=True)
+                cover = Page(kind="cover", blocks=[b])
+                if queue and queue[0]["type"] == "paragraph":
+                    cover.blocks.append(queue.popleft())
+                pages.append(cover)
+                cur = TwoColPage(title=ctx.doc_title, continued=False)
+                continue
+            if not cur.is_empty():
+                flush(balance=True)
+                cur = TwoColPage()
+        if t == "heading" and b["level"] == 2 and ctx.is_slide:
+            flush(balance=True)
+            cur = TwoColPage(title=b["text"], continued=False)
+            continue
+
+        if is_wide(b, ctx, queue):
+            close_region(balance=True)
+            h = _height(ctx.heights_single, b)
+            keep = _keep_with_next(ctx, b, queue)
+            if cur.used_before + h.outer + keep <= ctx.capacity:
+                cur.segments.append(("wide", b, h))
+                cur.used_before += h.outer
+                continue
+            remaining = ctx.capacity - cur.used_before - h.margin_top
+            split = _try_split(ctx, b, h, remaining, page_empty=cur.is_empty())
+            if split is not None:
+                head, head_h, tail, tail_h = split
+                cur.segments.append(("wide", head, head_h))
+                cur.used_before += head_h.outer
+                register_tail(head, tail, tail_h)
+                flush()
+                cur = continuation()
+                queue.appendleft(tail)
+                continue
+            if cur.is_empty():
+                if h.margin_top + h.height > ctx.capacity / SAFETY:
+                    ctx.warnings.append(f"block {b.get('id')} ({t}) is taller than a page; it will be clipped")
+                cur.segments.append(("wide", b, h))
+                cur.used_before += h.outer
+                continue
+            queue.appendleft(b)
+            if cur.segments and cur.segments[-1][0] == "wide" and cur.segments[-1][1]["type"] == "heading" and len(cur.segments) > 1:
+                heading = cur.segments.pop()
+                cur.used_before -= heading[2].outer
+                queue.appendleft(heading[1])
+            flush()
+            cur = continuation()
+            continue
+
+        # column flow
+        if cur.region is None:
+            cur.region = Region()
+        reg = cur.region
+        limit = ctx.capacity - cur.used_before
+        h = _height(ctx.heights, b)
+        keep = _keep_with_next(ctx, b, queue)
+        col_blocks, acc = (reg.right, reg.right_acc) if reg.left_full else (reg.left, reg.left_acc)
+        if acc.used + acc.needed(h) + keep <= limit:
+            col_blocks.append(b)
+            acc.add(h)
+            continue
+        # a figure that no longer fits the left column floats to the top of the empty right
+        # column; the text keeps flowing in the left column beside it (magazine-style)
+        if (t in FIGURE_TYPES and not reg.left_full and not reg.right
+                and reg.right_acc.needed(h) <= limit):
+            reg.right.append(b)
+            reg.right_acc.add(h)
+            continue
+        remaining = acc.remaining(limit, h)
+        split = _try_split(ctx, b, h, remaining, page_empty=(acc.count == 0))
+        if split is not None:
+            head, head_h, tail, tail_h = split
+            col_blocks.append(head)
+            acc.add(head_h)
+            register_tail(head, tail, tail_h)
+            queue.appendleft(tail)
+            if not reg.left_full:
+                reg.left_full = True
+            else:
+                flush()
+                cur = continuation()
+            continue
+        if acc.count == 0 and cur.used_before == 0:
+            if acc.gap_for(h) + h.height > limit / SAFETY:
+                ctx.warnings.append(f"block {b.get('id')} ({t}) is taller than a column; it will be clipped")
+            col_blocks.append(b)
+            acc.add(h)
+            continue
+        # move the block whole to the next column / page, taking a trailing heading along
+        queue.appendleft(b)
+        if col_blocks and col_blocks[-1]["type"] == "heading" and len(col_blocks) > 1:
+            moved = col_blocks.pop()
+            queue.appendleft(moved)
+            _rebuild_accumulator(acc, col_blocks, ctx.heights)
+        if not reg.left_full and acc.count > 0:
+            reg.left_full = True
+        else:
+            flush()
+            cur = continuation()
+    flush(balance=True)
+    for p in pages:
+        for blk in p.blocks:
+            blk.pop("_order", None)
+    return pages
+
+
+def _rebuild_accumulator(acc: Accumulator, blocks: list[dict[str, Any]], heights: dict[str, BlockHeight]) -> None:
+    acc.used, acc.last_mb, acc.count = 0.0, 0.0, 0
+    for b in blocks:
+        acc.add(heights[b["id"]])
+
+
+def _balance_region(reg: Region, ctx: PaginateContext) -> None:
+    """Redistribute the region's blocks (in source order) over both columns so they
+    end at roughly the same height (used when a band follows or the page ends early)."""
+    blocks = sorted(reg.left + reg.right, key=lambda b: b.get("_order", float("inf")))
+    total_acc = Accumulator()
+    for b in blocks:
+        total_acc.add(ctx.heights[b["id"]])
+    target = (total_acc.used + total_acc.last_mb) / 2.0
+    left: list[dict[str, Any]] = []
+    right: list[dict[str, Any]] = []
+    lacc = Accumulator()
+    for b in blocks:
+        if right:
+            right.append(b)
+            continue
+        h = ctx.heights[b["id"]]
+        if lacc.used + lacc.needed(h) <= target:
+            left.append(b)
+            lacc.add(h)
+            continue
+        split = _try_split(ctx, b, h, lacc.remaining(target, h), page_empty=True)
+        if split is not None:
+            head, head_h, tail, tail_h = split
+            left.append(head)
+            lacc.add(head_h)
+            ctx.heights[tail["id"]] = tail_h
+            ctx.heights_single[tail["id"]] = tail_h
+            tail["_order"] = _next_order(head.get("_order"))
+            right.append(tail)
+        elif not left:
+            left.append(b)  # an unsplittable first block stays left, whatever its height
+            lacc.add(h)
+        else:
+            right.append(b)
+    if right and left and left[-1]["type"] == "heading" and len(left) > 1:
+        right.insert(0, left.pop())
+    lacc = Accumulator()
+    racc = Accumulator()
+    _rebuild_accumulator(lacc, left, ctx.heights)
+    _rebuild_accumulator(racc, right, ctx.heights)
+    new_height = max(lacc.used + (lacc.last_mb if left else 0.0),
+                     racc.used + (racc.last_mb if right else 0.0))
+    if new_height > reg.height() + 0.5:
+        # the source-order redistribution would be taller than the current placement
+        # (typically a floated figure followed by long text): keep the current placement
+        return
+    reg.left, reg.right = left, right
+    reg.left_acc, reg.right_acc = lacc, racc
+    reg.left_full = True
 
 
 def flatten_for_reflow(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:

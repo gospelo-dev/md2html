@@ -22,6 +22,7 @@ LAYOUT_KEYS = {
     "splitRatio": (int, float),
     "details": str,
     "mermaidLib": str,
+    "mermaidVersion": (str, type(None)),
     "hrBreak": bool,
     "imageScale": (int, float),
     "embedImages": bool,
@@ -31,7 +32,7 @@ LAYOUT_KEYS = {
 }
 
 PAGE_OVERRIDE_KEYS = {"columns", "figureSide", "splitRatio"}
-BLOCK_OVERRIDE_KEYS = {"maxHeightRatio"}
+BLOCK_OVERRIDE_KEYS = {"maxHeightRatio", "span"}  # span: 1 | 2 (two-column layout)
 
 
 class LayoutError(ValueError):
@@ -49,6 +50,7 @@ class Layout:
     split_ratio: float = 0.5
     details: str = "drop"
     mermaid_lib: str = "embed"
+    mermaid_version: str | None = None   # None = newest vendored; generated HTML records the effective one
     hr_break: bool = False
     image_scale: float = 1.0
     embed_images: bool = False
@@ -62,6 +64,9 @@ class Layout:
     def block_override(self, block_id: str) -> dict[str, Any]:
         return {k: v for k, v in self.overrides.get(block_id, {}).items() if k in BLOCK_OVERRIDE_KEYS}
 
+    def span_overrides(self) -> dict[str, int]:
+        return {k: int(v["span"]) for k, v in self.overrides.items() if isinstance(v, dict) and v.get("span") in (1, 2)}
+
 
 _CAMEL_TO_FIELD = {
     "page": "page",
@@ -73,6 +78,7 @@ _CAMEL_TO_FIELD = {
     "splitRatio": "split_ratio",
     "details": "details",
     "mermaidLib": "mermaid_lib",
+    "mermaidVersion": "mermaid_version",
     "hrBreak": "hr_break",
     "imageScale": "image_scale",
     "embedImages": "embed_images",
@@ -107,6 +113,10 @@ def _validate_overrides(overrides: dict[str, Any], path: Path) -> None:
         for k in values:
             if k not in PAGE_OVERRIDE_KEYS | BLOCK_OVERRIDE_KEYS:
                 raise LayoutError(f"unknown override key {k!r} for {target!r} in {path}")
+        if "span" in values and values["span"] not in (1, 2):
+            raise LayoutError(f"override span for {target!r} must be 1 or 2 in {path}")
+        if "columns" in values and values["columns"] not in ("two", "split", "single"):
+            raise LayoutError(f"override columns for {target!r} must be two, split or single in {path}")
 
 
 def build_layout(layout_path: Path | None, cli: dict[str, Any], base: dict[str, Any] | None = None) -> Layout:
@@ -150,6 +160,8 @@ def _check(layout: Layout) -> None:
         raise LayoutError(f"invalid details mode {layout.details!r}")
     if layout.mermaid_lib not in ("embed", "link"):
         raise LayoutError(f"invalid mermaid lib mode {layout.mermaid_lib!r}")
+    if layout.mermaid_version is not None and not re.match(r"^\d+\.\d+\.\d+$", layout.mermaid_version):
+        raise LayoutError(f"invalid mermaid version {layout.mermaid_version!r}: expected MAJOR.MINOR.PATCH")
     if layout.image_scale <= 0:
         raise LayoutError("image scale must be positive")
     if layout.date is not None and layout.date != "none" and not re.match(r"^\d{4}-\d{2}-\d{2}$", layout.date):

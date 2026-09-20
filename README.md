@@ -10,13 +10,13 @@ Turn Markdown + Mermaid into **layout-aware, paginated HTML slide decks and docu
 
 Most Markdown-to-PDF tools flow text into a browser's print engine and hope for the best: headings land at the bottom of a page, tables split anywhere, diagrams shrink or overflow, and once the HTML exists nobody can adjust a single page without regenerating everything. This skill is built around three things:
 
-1. **Layout-aware pagination.** `import` renders every block in headless Chromium to get real heights and paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, one figure beside the text on landscape paper) into 16:9 / 4:3 slides or A4 / A3 documents.
+1. **Layout-aware pagination.** `import` renders every block in headless Chromium to get real heights and paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, two columns on landscape paper) into 16:9 / 4:3 slides or A4 / A3 documents.
 2. **Editable by an AI.** Content lives in a **content JSON** (one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source) that is also embedded in the generated HTML. An agent edits the page in question and runs `build`; it can do the same when all it has is the HTML file. Anything that no longer fits is spilled to a continuation page with the same title, and the JSON always matches the output.
 3. **The original is preserved.** The Markdown as imported is kept verbatim inside the JSON and the HTML; `restore` gets it back at any time, and a fresh `import` from it undoes every edit.
 
 Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid is rendered in the browser by an embedded Mermaid.js, so diagrams stay editable all the way to the final file.
 
-New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md) ([日本語](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md)).
+New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md) ([日本語](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md)). The typographic rules behind the layout (font-size scale, margins, columns, figure placement) are explained in [docs/design/design_theory.md](https://github.com/gospelo-dev/md2html/blob/main/docs/design/design_theory.md) (Japanese), which is itself built with this skill into a 16:9 deck.
 
 ## What you get
 
@@ -25,7 +25,7 @@ New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/
 | Paper sizes | `a4`, `a4-landscape`, `a3`, `a3-landscape` (documents) and `16x9`, `4x3` (slides) |
 | One knob for typography | Everything (headings, tables, code, margins, footer size) derives from `--font-size` |
 | Slides | One slide per `h2`; the heading moves into a header band at 1.25x body size, continuation slides are marked |
-| Split layout | Landscape formats put one figure beside the text; pages without a figure fall back to a single column |
+| Two columns | Landscape formats flow blocks down the left column, then the right (N order); wide tables, code and wide figures become full-width bands. Portrait formats are single column. `split` (one figure beside the text) is also available |
 | Real measurement | Heights are measured in Chromium (Playwright), never estimated; a verify pass checks every page for overflow |
 | Editable content | Page-scoped JSON; table rows, list items and Mermaid source are plain data |
 | Auto spill | Content that stops fitting after an edit moves to a `(continued)` page; nothing is deleted or forced |
@@ -108,16 +108,16 @@ Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**b
   "page": "16x9",
   "fontSize": "14pt",
   "titleScale": 1.25,
-  "columns": "split",
-  "figureSide": "right",
+  "columns": "two",
   "overrides": {
     "p07": { "columns": "single" },
+    "p08-b1": { "span": 2 },
     "p09-b0": { "maxHeightRatio": 0.7 }
   }
 }
 ```
 
-Pass it with `--layout layout.json`; CLI options win over the file. `overrides` adjust a single page or block (for example, a page whose diagram is too wide for the split layout).
+Pass it with `--layout layout.json`; CLI options win over the file. `overrides` adjust a single page or block: switch a page to a single column, make a block a full-width band (`span: 2`) or keep it in a column (`span: 1`), cap a figure's height.
 
 ### Options
 
@@ -127,11 +127,12 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--font-size` | A4 11pt, A3 12pt, slides 14pt | Body size in `pt`, `px` or `mm`; every other dimension derives from it |
 | `--title-scale` | `1.25` | Slide header title size relative to body |
 | `--header-title` | `section` | `section` (current h2), `doc` (document h1) or `fixed:<text>` |
-| `--columns` | landscape `split`, portrait `single` | Base layout |
-| `--figure-side` | `right` | Figure column side in split layout |
-| `--split-ratio` | `0.5` | Text column fraction (0.4 to 0.6) |
+| `--columns` | landscape `two`, portrait `single` | `two` (N-order columns with full-width bands), `split` (one figure beside the text), `single` |
+| `--figure-side` | `right` | Figure column side in `split` layout |
+| `--split-ratio` | `0.5` | Text column fraction in `split` layout (0.4 to 0.6) |
 | `--details` | `drop` | `<details>` handling; Mermaid sources inside folds are always rescued |
-| `--mermaid-lib` | `embed` | `embed` Mermaid.js into the HTML (single file, about 3MB) or `link` it as a sibling file |
+| `--mermaid-lib` | `embed` | `embed` Mermaid.js into the HTML (single file, about 3MB) or `link` it as a sibling `mermaid-<version>.min.js` |
+| `--mermaid-version` | newest vendored | Vendored Mermaid version to render with (`X.Y.Z`). A generated HTML records the version it was paginated with and is rebuilt with that same version; see `THIRD_PARTY_NOTICES.md` for adding versions |
 | `--hr-break` | off | Treat `---` as a page break in slide formats |
 | `--embed-images` | off | Inline images as data URIs |
 | `--date` | today | Footer date, or `none` |

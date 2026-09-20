@@ -4,7 +4,7 @@
 
 <p align="center"><img src="https://github.com/gospelo-dev/md2html/blob/main/assets/hero.jpg?raw=true" alt="gospelo-md2html: Markdown + Mermaid からページ分割されたスライドと文書へ。編集可能な JSON、原文を保持" width="820"></p>
 
-Markdown + Mermaid から、**レイアウトを考慮してページ分割されたスライド資料や文書を、自己完結した HTML 1 ファイル、PDF、PPTX として** 作ります。生成した HTML は **AI エージェントがそのまま編集して再生成でき**、**原文の Markdown を内部に保持** しています。名前は HTML ですが、HTML は正本であり、他の形式はそこから生成します。単なる Markdown から HTML への変換ではありません。
+Markdown + Mermaid から、**レイアウトを考慮してページ分割されたスライド資料や文書** を **自己完結した HTML 1 ファイル** として作ります。PDF と PPTX の出力にも対応しています。生成した HTML は **AI エージェントがそのまま編集して再生成でき**、**原文の Markdown を内部に保持** しています。名前は HTML ですが、HTML は正本であり、他の形式はそこから生成します。単なる Markdown から HTML への変換ではありません。
 
 English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/README.md)
 

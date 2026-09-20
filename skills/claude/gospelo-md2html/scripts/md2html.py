@@ -106,7 +106,7 @@ def make_parser() -> argparse.ArgumentParser:
     return p
 
 
-def layout_from_args(args: argparse.Namespace) -> Layout:
+def layout_from_args(args: argparse.Namespace, base: dict[str, Any] | None = None) -> Layout:
     cli = {
         "page": args.page, "font_size": args.font_size, "title_scale": args.title_scale,
         "header_title": args.header_title, "columns": args.columns, "figure_side": args.figure_side,
@@ -114,7 +114,7 @@ def layout_from_args(args: argparse.Namespace) -> Layout:
         "hr_break": args.hr_break, "image_scale": args.image_scale, "embed_images": args.embed_images,
         "date": args.date, "css": args.css,
     }
-    return build_layout(args.layout, cli)
+    return build_layout(args.layout, cli, base)
 
 
 def metrics_from_layout(layout: Layout) -> Metrics:
@@ -391,9 +391,12 @@ def _notes_dict(notes: blocks_mod.ImportNotes) -> dict[str, Any]:
 
 
 def _prepare_build(args: argparse.Namespace):
+    """Input may be a content JSON or a generated HTML (which embeds its JSON and layout).
+    For HTML the embedded layout is the base; --layout and CLI options override it."""
     content_path: Path = args.content
     doc = content_mod.load_content(content_path)
-    layout = layout_from_args(args)
+    embedded_layout = content_mod.load_embedded_layout(content_path)
+    layout = layout_from_args(args, embedded_layout)
     metrics = metrics_from_layout(layout)
     image_base = resolve_image_base(content_path, doc)
     return content_path, doc, layout, metrics, image_base
@@ -446,13 +449,20 @@ def _fix_spill_keys(report: dict[str, Any]) -> None:
 
 def cmd_build(args: argparse.Namespace) -> int:
     content_path, doc, layout, metrics, image_base = _prepare_build(args)
-    out_path: Path = args.output or content_path.with_suffix(".html")
+    from_html = content_mod.is_html_path(content_path)
+    # An HTML input is rebuilt in place by default: the HTML is the document.
+    out_path: Path = args.output or (content_path if from_html else content_path.with_suffix(".html"))
     out_dir = out_path.resolve().parent
     out_dir.mkdir(parents=True, exist_ok=True)
     date = date_text(layout, doc["meta"].get("date"))
 
     if args.reflow:
-        return _cmd_reflow(content_path, doc, layout, metrics, image_base, args.verbose)
+        if not from_html:
+            return _cmd_reflow(content_path, doc, layout, metrics, image_base, args.verbose)
+        doc, reflow_warnings = _reflow_doc(doc, layout, metrics, image_base, out_dir)
+        print(f"reflowed {content_path}: {len(content_mod.content_pages(doc))} pages; rebuilding the HTML")
+        for w in reflow_warnings:
+            print(f"  warning: {w}")
 
     with Browser() as browser:
         pages, spills, warnings = _build_pages(browser, doc, layout, metrics, image_base, out_dir, args.verbose)
@@ -474,9 +484,13 @@ def cmd_build(args: argparse.Namespace) -> int:
         final_pages = _replay_push(pages, verify)
     changed = bool(spills) or bool(pushed)
     if changed and not args.no_write_back:
-        doc["pages"] = ([doc["pages"][0]] if doc["pages"][0]["kind"] == "source" else []) + final_pages
-        content_mod.save_content(doc, content_path)
-        print(f"wrote back {content_path} (auto spill)")
+        if from_html:
+            # the rebuilt HTML already embeds the updated pages; there is no separate JSON to write
+            print(f"auto spill applied; the updated content JSON is embedded in {out_path}")
+        else:
+            doc["pages"] = ([doc["pages"][0]] if doc["pages"][0]["kind"] == "source" else []) + final_pages
+            content_mod.save_content(doc, content_path)
+            print(f"wrote back {content_path} (auto spill)")
     report = report_mod.build_report(metrics, metrics.columns, verify,
                                      [{"from": s.source, "to": s.target, "blocks": s.blocks} for s in spills], warnings)
     report["verifyRounds"] = rounds
@@ -508,11 +522,11 @@ def _replay_push(pages: list[dict[str, Any]], verify: list[dict[str, Any]]) -> l
     return out
 
 
-def _cmd_reflow(content_path: Path, doc, layout: Layout, metrics: Metrics, image_base: Path, verbose: bool) -> int:
+def _reflow_doc(doc, layout: Layout, metrics: Metrics, image_base: Path, work_dir: Path) -> tuple[dict[str, Any], list[str]]:
+    """Re-paginate every block from scratch. Returns (doc with new pages, warnings)."""
     flat = flatten_for_reflow(doc["pages"])
     for i, b in enumerate(flat):
         b["id"] = f"b{i}"
-    work_dir = content_path.resolve().parent
     measure_ctx = RenderContext(metrics, layout, image_base, None)
     with Browser() as browser:
         heights_col, heights_single = measure_heights(browser, flat, measure_ctx, work_dir)
@@ -524,10 +538,16 @@ def _cmd_reflow(content_path: Path, doc, layout: Layout, metrics: Metrics, image
             b.pop("id", None)
     head = [doc["pages"][0]] if doc["pages"][0]["kind"] == "source" else []
     doc["pages"] = head + pages
-    content_mod.validate_content(doc, str(content_path))
+    content_mod.validate_content(doc, "reflow")
+    content_mod.assign_block_ids(doc)
+    return doc, pctx.warnings
+
+
+def _cmd_reflow(content_path: Path, doc, layout: Layout, metrics: Metrics, image_base: Path, verbose: bool) -> int:
+    doc, warnings = _reflow_doc(doc, layout, metrics, image_base, content_path.resolve().parent)
     content_mod.save_content(doc, content_path)
-    print(f"reflowed {content_path}: {len(pages)} pages (no HTML written; run build next)")
-    for w in pctx.warnings:
+    print(f"reflowed {content_path}: {len(content_mod.content_pages(doc))} pages (no HTML written; run build next)")
+    for w in warnings:
         print(f"  warning: {w}")
     return EXIT_OK
 

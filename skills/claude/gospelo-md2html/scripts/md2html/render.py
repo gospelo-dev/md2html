@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any
 
 from . import assets
-from .content import FIGURE_TYPES, escape_for_script
+from .content import CONTENT_SCRIPT_ID, FIGURE_TYPES, LAYOUT_SCRIPT_ID, embed_json, escape_for_script, strip_runtime_ids
 from .inline import render_inline
-from .layout import Layout
+from .layout import Layout, layout_to_dict
 from .scale import Metrics
 
 
@@ -249,6 +249,18 @@ def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: Rende
         src_attr = f' data-source="{_esc(doc["meta"].get("source") or "")}"'
         body.append(f'<script type="text/markdown" id="page-0"{src_attr}>\n'
                     + escape_for_script(src_page["blocks"][0]["text"]) + "\n</script>")
+    # The HTML carries its own content JSON and layout so that `build out.html` can
+    # regenerate it without the original JSON (docs/07 section 9).
+    embedded = {"version": doc["version"], "meta": dict(doc["meta"]),
+                "pages": ([src_page] if src_page is not None else []) + list(pages)}
+    embedded = strip_runtime_ids(embedded)
+    source = doc["meta"].get("source")
+    if source and ctx.html_dir is not None:
+        md_path = (ctx.image_base / Path(source).name).resolve()
+        embedded["meta"]["source"] = os.path.relpath(md_path, ctx.html_dir.resolve()).replace(os.sep, "/")
+    body.append(f'<script type="application/json" id="{CONTENT_SCRIPT_ID}">\n' + embed_json(embedded) + "\n</script>")
+    body.append(f'<script type="application/json" id="{LAYOUT_SCRIPT_ID}">\n'
+                + embed_json(layout_to_dict(ctx.layout)) + "\n</script>")
     total = len(pages)
     for i, page in enumerate(pages, start=1):
         body.append(render_page(page, ctx, i, total, title, date_text))

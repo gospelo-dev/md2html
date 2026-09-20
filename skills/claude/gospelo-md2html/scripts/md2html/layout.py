@@ -109,9 +109,15 @@ def _validate_overrides(overrides: dict[str, Any], path: Path) -> None:
                 raise LayoutError(f"unknown override key {k!r} for {target!r} in {path}")
 
 
-def build_layout(layout_path: Path | None, cli: dict[str, Any]) -> Layout:
-    """Merge layout file (if any) with CLI values. CLI values that are None are ignored."""
+def build_layout(layout_path: Path | None, cli: dict[str, Any], base: dict[str, Any] | None = None) -> Layout:
+    """Merge, lowest priority first: `base` (layout embedded in an input HTML),
+    the layout file, then CLI values. CLI values that are None are ignored."""
     layout = Layout()
+    if base:
+        for key, value in base.items():
+            if key not in LAYOUT_KEYS:
+                raise LayoutError(f"unknown layout key {key!r} in embedded layout")
+            setattr(layout, _CAMEL_TO_FIELD[key], value)
     if layout_path is not None:
         data = load_layout_file(layout_path)
         for key, value in data.items():
@@ -124,6 +130,17 @@ def build_layout(layout_path: Path | None, cli: dict[str, Any]) -> Layout:
         setattr(layout, key, value)
     _check(layout)
     return layout
+
+
+def layout_to_dict(layout: Layout) -> dict[str, Any]:
+    """The effective layout as layout-JSON keys (embedded into generated HTML)."""
+    out: dict[str, Any] = {}
+    for camel, field_name in _CAMEL_TO_FIELD.items():
+        value = getattr(layout, field_name)
+        if camel == "overrides" and not value:
+            continue
+        out[camel] = value
+    return out
 
 
 def _check(layout: Layout) -> None:

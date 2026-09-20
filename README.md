@@ -4,7 +4,7 @@
 
 <p align="center"><img src="https://github.com/gospelo-dev/md2html/blob/main/assets/hero.jpg?raw=true" alt="gospelo-md2html: Markdown + Mermaid to paginated slides and documents, editable JSON, original kept" width="820"></p>
 
-Turn Markdown + Mermaid into **layout-aware, paginated slide decks and documents, delivered as one self-contained HTML file, as PDF and as PPTX**, that an **AI agent can edit and rebuild as they are**, and that **keep the original Markdown inside**. The name says HTML; the HTML is the master document, and every other format is produced from it. This is not a plain Markdown-to-HTML converter.
+Turn Markdown + Mermaid into **layout-aware, paginated slide decks and documents** as **one self-contained HTML file**, with PDF and PPTX output as well. The HTML is a file that an **AI agent can edit and rebuild as it is**, and it **keeps the original Markdown inside**. The name says HTML; the HTML is the master document, and every other format is produced from it. This is not a plain Markdown-to-HTML converter.
 
 日本語版: [README_ja.md](https://github.com/gospelo-dev/md2html/blob/main/README_ja.md)
 

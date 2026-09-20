@@ -70,8 +70,8 @@ python <skill>/scripts/extract_markdown.py old.html -o original.md   # 旧形式
 文字サイズの既定は A4 11pt、A3 12pt、スライド 14pt。用紙と文字サイズは `import`
 に渡す (ページ割りに使う)。`build` で変えるときは `--reflow`。
 
-段組 (`--columns`): 横長の用紙は既定で 2 段 (`two`: 左段の上から下へ、次に右段へ流す
-N 順。列数 4 以上の表、コード、横長の図は幅いっぱいの帯)、縦長は単段 (`single`)。
+段組 (`--columns`): 横長の用紙は既定で 2 段組 (`two`: 左段 → 右段。左段の上から下へ、次に右段へ
+流す。列数 4 以上の表、コード、横長の図は幅いっぱいの帯)、縦長は単段 (`single`)。
 `split` は図 1 枚をテキストの隣に置く形式。ページやブロック単位の変更はレイアウトの
 `overrides` (`columns`、`span`)。
 

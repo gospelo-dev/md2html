@@ -100,9 +100,9 @@ Paper sizes follow ISO 216 [S1] and PowerPoint's Widescreen / 4:3 [V1]; millimet
 
 **Landscape paper defaults to two columns.** A single column would be 63 full-width characters per line, far beyond the 40-character maximum for horizontal Japanese [S2] [W6] [W7]. Two columns give 31, close to the 20 to 29 characters at which Japanese reading speed peaks [R2]. The gap is 1.5F, the same as the line height: the smallest distance that keeps the eye from jumping to the neighbouring column (between the JIS default of 2F [S2] and the CSS default of 1em [W5]).
 
-<img src="../assets/design/two-columns.en.png" alt="A 16:9 page in two columns: blocks 1 to 7 flow down the left column then the right, a full-width band 8 interrupts, and columns 9 and 10 resume below it" width="1240">
+<img src="../assets/design/two-columns.en.png" alt="A 16:9 page in two columns: blocks 1 to 7 flow down the left column then the right in column order, a full-width band 8 interrupts, and columns 9 and 10 resume below it" width="1240">
 
-Reading order is N: down the left column, then the right (columns in horizontal writing run left to right [W6] [G7]). Alternating Z order is rejected because the eye would jump mid-paragraph. Elements that need the full width close the columns and become a band, after which the two columns resume. A figure that does not fit at the bottom of the left column floats to the top of an empty right column while the text keeps flowing on the left (block 4 above).
+Reading order is column order (left column, then right): down the left column, then down the right (columns in horizontal writing run left to right [W6] [G7]). Traced on the page the path forms a mirrored N, the Cyrillic И. Alternating Z order is rejected because the eye would jump mid-paragraph. Elements that need the full width close the columns and become a band, after which the two columns resume. A figure that does not fit at the bottom of the left column floats to the top of an empty right column while the text keeps flowing on the left (block 4 above).
 
 | Paper | Column width | Gap | Characters per line |
 | --- | --- | --- | --- |

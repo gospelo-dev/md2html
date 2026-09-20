@@ -60,7 +60,7 @@ def _add_layout_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--title-scale", dest="title_scale", type=float)
     g.add_argument("--header-title", dest="header_title", help="section | doc | fixed:<text>")
     g.add_argument("--columns", choices=["two", "split", "single"],
-                   help="two = N-order two columns (default on landscape paper), split = one figure beside the text, single")
+                   help="two = two columns in column order, left then right (default on landscape paper), split = one figure beside the text, single")
     g.add_argument("--figure-side", dest="figure_side", choices=["left", "right"])
     g.add_argument("--split-ratio", dest="split_ratio", type=float)
     g.add_argument("--details", choices=["drop", "expand"])

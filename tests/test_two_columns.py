@@ -1,4 +1,4 @@
-"""Two-column (N order) pagination with fixed heights (no browser). Run:
+"""Two-column (column order: left, then right) pagination with fixed heights (no browser). Run:
     uv run --with pytest --with markdown-it-py --with mdit-py-plugins pytest <repo>/tests
 """
 

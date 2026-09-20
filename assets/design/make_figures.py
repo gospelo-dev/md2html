@@ -53,8 +53,8 @@ L = {
         "r_h2_above": "1.8F", "r_h2_below": "0.6F", "r_para": "0.7F", "r_h3_above": "1.4F", "r_h3_below": "0.4F",
         "r_table_above": "0.5F", "r_table_below": "1.0F",
         "para": "paragraph", "tbl": "table",
-        "columns_title": "Two columns in N order (16:9, to scale)",
-        "n_order": "N order: down the left column, then the right",
+        "columns_title": "Two columns in column order (16:9, to scale)",
+        "n_order": "column order: down the left column, then the right (a mirrored N)",
         "band": "band: table with 4+ columns, code, wide figure",
         "float": "a figure that does not fit the left column|floats to the top of the empty right column",
         "resume": "columns resume after the band",
@@ -90,8 +90,8 @@ L = {
         "r_h2_above": "1.8F", "r_h2_below": "0.6F", "r_para": "0.7F", "r_h3_above": "1.4F", "r_h3_below": "0.4F",
         "r_table_above": "0.5F", "r_table_below": "1.0F",
         "para": "段落", "tbl": "表",
-        "columns_title": "N 順の 2 段 (16:9、実寸比)",
-        "n_order": "N 順: 左段を上から下へ、次に右段へ",
+        "columns_title": "2 段組 (左段 → 右段) (16:9、実寸比)",
+        "n_order": "左段を上から下へ、次に右段へ (И の形)",
         "band": "帯: 4 列以上の表、コード、横長の図",
         "float": "左段に入らない図は空いている右段へ浮動",
         "resume": "帯の後は再び 2 段",
@@ -273,7 +273,7 @@ def fig_scale(lang: str, out: Path):
 
 
 # --------------------------------------------------------------------------
-# figure 3: two columns, N order, band and float
+# figure 3: two columns in column order (left, then right), band and float
 # --------------------------------------------------------------------------
 
 def fig_columns(lang: str, out: Path):
@@ -322,7 +322,7 @@ def fig_columns(lang: str, out: Path):
     h2 = y + ch - y2
     num_block(xl, y2, colw, h2, 9, lbl_para)
     num_block(xr, y2, colw, h2, 10, lbl_para)
-    # N order arrow
+    # reading-order arrows
     ax = ox + pw + 30
     svg.line(ax, y, ax, y + seg1_h - 4, stroke=TEAL, sw=1.5, marker=True)
     svg.line(ax + 16, y, ax + 16, y + seg1_h - 4, stroke=TEAL, sw=1.5, marker=True, dash="4 3")

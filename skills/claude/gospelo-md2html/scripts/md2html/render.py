@@ -184,7 +184,7 @@ def render_page(page: dict[str, Any], ctx: RenderContext, page_no: int, total: i
 
 
 def _render_two_columns(page: dict[str, Any], ctx: RenderContext) -> str:
-    """N-order two-column page: segments of [left | right] columns and full-width bands.
+    """Two-column page in column order (left column, then right): segments of [left | right] columns and full-width bands.
     The placement (`_layout`) is computed by paginate; without it every block is a band."""
     blocks = page["blocks"]
     layout = page.get("_layout") or [{"kind": "wide", "index": i} for i in range(len(blocks))]

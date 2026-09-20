@@ -21,7 +21,7 @@ class PageFormat:
     margin_h_mm: float
     default_font_pt: float
     is_slide: bool
-    default_columns: str  # "two" (N-order two columns) | "split" (figure + text) | "single"
+    default_columns: str  # "two" (column order: left column, then right) | "split" (figure + text) | "single"
 
     @property
     def is_landscape(self) -> bool:

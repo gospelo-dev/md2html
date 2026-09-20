@@ -25,7 +25,7 @@ New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/
 | Paper sizes | `a4`, `a4-landscape`, `a3`, `a3-landscape` (documents) and `16x9`, `4x3` (slides) |
 | One knob for typography | Everything (headings, tables, code, margins, footer size) derives from `--font-size` |
 | Slides | One slide per `h2`; the heading moves into a header band at 1.25x body size, continuation slides are marked |
-| Two columns | Landscape formats flow blocks down the left column, then the right (N order); wide tables, code and wide figures become full-width bands. Portrait formats are single column. `split` (one figure beside the text) is also available |
+| Two columns | Landscape formats flow blocks in column order (down the left column, then the right); wide tables, code and wide figures become full-width bands. Portrait formats are single column. `split` (one figure beside the text) is also available |
 | Real measurement | Heights are measured in Chromium (Playwright), never estimated; a verify pass checks every page for overflow |
 | Editable content | Page-scoped JSON; table rows, list items and Mermaid source are plain data |
 | Auto spill | Content that stops fitting after an edit moves to a `(continued)` page; nothing is deleted or forced |
@@ -127,7 +127,7 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--font-size` | A4 11pt, A3 12pt, slides 14pt | Body size in `pt`, `px` or `mm`; every other dimension derives from it |
 | `--title-scale` | `1.25` | Slide header title size relative to body |
 | `--header-title` | `section` | `section` (current h2), `doc` (document h1) or `fixed:<text>` |
-| `--columns` | landscape `two`, portrait `single` | `two` (N-order columns with full-width bands), `split` (one figure beside the text), `single` |
+| `--columns` | landscape `two`, portrait `single` | `two` (column order, left column then right, with full-width bands), `split` (one figure beside the text), `single` |
 | `--figure-side` | `right` | Figure column side in `split` layout |
 | `--split-ratio` | `0.5` | Text column fraction in `split` layout (0.4 to 0.6) |
 | `--details` | `drop` | `<details>` handling; Mermaid sources inside folds are always rescued |
@@ -179,7 +179,7 @@ The recipient unzips it and runs `python gospelo-md2html/scripts/install.py --pr
 
 - Heights come from a measurement pass: every block is rendered in a hidden flow container at the text column width (and at full width for landscape formats), and Chromium reports block, row, item and line heights.
 - Pages are filled greedily to 98% of the content height. Headings reserve room for the following lines (or the whole figure) so they never end a page. Tables split at row boundaries with the header repeated and never leave fewer than three rows; code splits only above 15 lines; paragraphs split at measured line boundaries with the inline Markdown re-serialised on both sides.
-- Landscape formats use two columns in N order (down the left column, then the right); tables with four or more columns, code and wide figures become full-width bands, and a figure that does not fit the left column floats to the top of an empty right column.
+- Landscape formats use two columns in column order (down the left column, then the right); tables with four or more columns, code and wide figures become full-width bands, and a figure that does not fit the left column floats to the top of an empty right column.
 - A verify pass opens the final HTML, measures each page again, and spills anything that still overflows. `build` keeps your page boundaries and only ever moves content forward into `(continued)` pages.
 
 The design documents behind these rules (page formats, layout logic, content model, decisions) live in the maintainers' working directory and are summarised in the skill's `references/`.

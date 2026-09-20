@@ -440,7 +440,7 @@ def _unique_id(base: str, existing: set[str]) -> str:
 
 # --------------------------------------------------------------------------
 # two-column flow (docs/04 section 4.7): fill the left column top to bottom,
-# then the right column ("N" reading order). Wide blocks (many-column tables,
+# then the right column (column order; traced on the page it forms a mirrored N). Wide blocks (many-column tables,
 # code, wide figures) become full-width bands; the two-column region above a
 # band is balanced so both columns end at the same height.
 # --------------------------------------------------------------------------

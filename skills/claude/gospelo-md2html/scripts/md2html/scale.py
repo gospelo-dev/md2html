@@ -115,7 +115,7 @@ class Metrics:
 
     @property
     def col2_px(self) -> float:
-        """Width of one column in the two-column (N order) layout."""
+        """Width of one column in the two-column layout (column order: left, then right)."""
         return (self.content_w_px - self.gutter_px) / 2.0
 
     def figure_box(self, mode: str, ratio_override: float | None = None) -> tuple[float, float, float]:

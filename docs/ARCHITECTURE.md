@@ -77,20 +77,21 @@ flowchart LR
     MD -->|import| H
     H -->|build| H
     H -->|build --pdf| PDF
+    H -->|build --pptx| PPTX["out.pptx"]
     H -->|check| R["report (stdout / JSON)"]
     H -->|restore| ORIG
     E["editor or agent<br/>edits the envelope"] -.->|edit| H
 
     classDef node fill:#FFFFFF,stroke:#666666,stroke-width:1.5px,color:#2C2C2C
-    class MD,H,PDF,ORIG,R,E node
-    linkStyle 0,1,2,3,4 stroke:#0D9488,stroke-width:2px
-    linkStyle 5 stroke:#9CA3AF,stroke-width:1.5px,stroke-dasharray:4 4
+    class MD,H,PDF,PPTX,ORIG,R,E node
+    linkStyle 0,1,2,3,4,5 stroke:#0D9488,stroke-width:2px
+    linkStyle 6 stroke:#9CA3AF,stroke-width:1.5px,stroke-dasharray:4 4
 ```
 
 | Command | Input | Output |
 | --- | --- | --- |
 | `import` | Markdown | `<name>.gospelo.html` (paginated, verified). `-o name.gospelo.json` writes the sidecar form instead. |
-| `build` | `.gospelo.html` or `.gospelo.json` | the same HTML rewritten in place (or `-o` elsewhere; a JSON input produces `<name>.gospelo.html`), optional PDF |
+| `build` | `.gospelo.html` or `.gospelo.json` | the same HTML rewritten in place (or `-o` elsewhere; a JSON input produces `<name>.gospelo.html`), optional PDF (`--pdf`) and PPTX (`--pptx`: one image slide per page from the same Chromium rendering, link hotspots, optional transparent text layer) |
 | `build --reflow` | same | all pages re-paginated from scratch |
 | `check` | same | capacity report, planned spills; writes nothing |
 | `restore` | same | the original Markdown from `pages[0]` |

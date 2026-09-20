@@ -43,8 +43,10 @@ class Browser:
         if self._pw is not None:
             self._pw.stop()
 
-    def open(self, html_path: Path):
-        page = self._browser.new_page()
+    def open(self, html_path: Path, scale: float = 1.0):
+        """Open a generated HTML and wait for figures.js. `scale` is the device
+        scale factor (screenshots at 96 dpi x scale)."""
+        page = self._browser.new_page(device_scale_factor=scale)
         page.goto(html_path.resolve().as_uri())
         wait_figures(page)
         return page

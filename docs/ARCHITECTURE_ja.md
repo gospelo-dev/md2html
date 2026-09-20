@@ -77,20 +77,21 @@ flowchart LR
     MD -->|import| H
     H -->|build| H
     H -->|build --pdf| PDF
+    H -->|build --pptx| PPTX["out.pptx"]
     H -->|check| R["レポート (標準出力 / JSON)"]
     H -->|restore| ORIG
     E["エディタやエージェントが<br/>エンベロープを編集"] -.->|編集| H
 
     classDef node fill:#FFFFFF,stroke:#666666,stroke-width:1.5px,color:#2C2C2C
-    class MD,H,PDF,ORIG,R,E node
-    linkStyle 0,1,2,3,4 stroke:#0D9488,stroke-width:2px
-    linkStyle 5 stroke:#9CA3AF,stroke-width:1.5px,stroke-dasharray:4 4
+    class MD,H,PDF,PPTX,ORIG,R,E node
+    linkStyle 0,1,2,3,4,5 stroke:#0D9488,stroke-width:2px
+    linkStyle 6 stroke:#9CA3AF,stroke-width:1.5px,stroke-dasharray:4 4
 ```
 
 | コマンド | 入力 | 出力 |
 | --- | --- | --- |
 | `import` | Markdown | `<name>.gospelo.html` (ページ割りと検証済み)。`-o name.gospelo.json` なら分離 JSON |
-| `build` | `.gospelo.html` または `.gospelo.json` | 同じ HTML を上書き (`-o` で別の場所も可。JSON 入力なら `<name>.gospelo.html`)、任意で PDF |
+| `build` | `.gospelo.html` または `.gospelo.json` | 同じ HTML を上書き (`-o` で別の場所も可。JSON 入力なら `<name>.gospelo.html`)、任意で PDF (`--pdf`) と PPTX (`--pptx`: 同じ Chromium の描画を 1 ページ 1 枚の画像スライドに、リンク領域と任意の透明テキスト層付き) |
 | `build --reflow` | 同上 | 全ページを組み直す |
 | `check` | 同上 | 容量レポートと送りの予定。何も書かない |
 | `restore` | 同上 | `pages[0]` の原文 Markdown |

@@ -5,6 +5,7 @@
 #   "markdown-it-py>=3.0",
 #   "mdit-py-plugins>=0.4",
 #   "playwright>=1.45",
+#   "python-pptx>=0.6.23",
 # ]
 # ///
 """gospelo-md2html: Markdown + Mermaid -> paginated HTML / PDF.
@@ -103,6 +104,13 @@ def make_parser() -> argparse.ArgumentParser:
     pb.add_argument("content", type=Path, help=".gospelo.html (rebuilt in place) or .gospelo.json")
     pb.add_argument("-o", "--output", type=Path, help="HTML path (default: the input HTML, or <name>.gospelo.html next to a JSON)")
     pb.add_argument("--pdf", type=Path)
+    pb.add_argument("--pptx", type=Path, help="also write a PPTX: one image slide per page, links as invisible hotspots")
+    pb.add_argument("--pptx-dpi", dest="pptx_dpi", type=int, default=200, help="slide image resolution (default 200)")
+    pb.add_argument("--pptx-image", dest="pptx_image", choices=["jpg", "png"], default="jpg",
+                    help="slide image format (default jpg; png is crisper but larger)")
+    pb.add_argument("--pptx-text", dest="pptx_text", action="store_true",
+                    help="add a transparent selectable-text layer over each slide (some viewers show it as faint doubled text)")
+    pb.add_argument("--pptx-no-links", dest="pptx_no_links", action="store_true", help="skip the link hotspots")
     pb.add_argument("--report", type=Path)
     pb.add_argument("--reflow", action="store_true",
                     help="re-paginate everything (HTML input: rebuild in place; JSON input: rewrite the JSON and exit)")
@@ -554,6 +562,13 @@ def cmd_build(args: argparse.Namespace) -> int:
         if args.pdf:
             browser.export_pdf(out_path, args.pdf)
             print(f"wrote {args.pdf}")
+        if args.pptx:
+            from md2html.pptx_export import PptxOptions, export_pptx
+            opts = PptxOptions(dpi=args.pptx_dpi, image_format="png" if args.pptx_image == "png" else "jpeg",
+                               text_layer=args.pptx_text, link_hotspots=not args.pptx_no_links)
+            counts = export_pptx(browser, out_path, args.pptx, metrics.fmt.width_mm, metrics.fmt.height_mm, opts)
+            print(f"wrote {args.pptx} ({counts['slides']} slides, {counts['links']} links"
+                  + (f", {counts['textLines']} text lines" if opts.text_layer else "") + ")")
 
     # final_pages is the page list the HTML was rendered from (including pages the verify pass pushed)
     before = {p["id"] for p in pages}

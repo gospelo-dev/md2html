@@ -52,3 +52,5 @@ Runtime dependencies resolved by `uv` at execution time (not vendored):
 | markdown-it-py | MIT |
 | mdit-py-plugins | MIT |
 | playwright (Python) | Apache-2.0 (Chromium is downloaded by Playwright under its own licenses) |
+| python-pptx (PPTX export) | MIT |
+| Pillow (pulled in by python-pptx) | MIT-CMU (HPND) |

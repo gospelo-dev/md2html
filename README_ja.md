@@ -4,7 +4,7 @@
 
 <p align="center"><img src="https://github.com/gospelo-dev/md2html/blob/main/assets/hero.jpg?raw=true" alt="gospelo-md2html: Markdown + Mermaid からページ分割されたスライドと文書へ。編集可能な JSON、原文を保持" width="820"></p>
 
-Markdown + Mermaid から、**レイアウトを考慮してページ分割された HTML のスライド資料や文書** を作ります。生成した HTML は **AI エージェントがそのまま編集して再生成でき**、**原文の Markdown を内部に保持** しています。単なる Markdown から HTML への変換ではありません。
+Markdown + Mermaid から、**レイアウトを考慮してページ分割されたスライド資料や文書を、自己完結した HTML 1 ファイル、PDF、PPTX として** 作ります。生成した HTML は **AI エージェントがそのまま編集して再生成でき**、**原文の Markdown を内部に保持** しています。名前は HTML ですが、HTML は正本であり、他の形式はそこから生成します。単なる Markdown から HTML への変換ではありません。
 
 English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/README.md)
 
@@ -32,6 +32,7 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 | Gospelo Document | `.gospelo.html` 1 ファイルが内容、レイアウト、原文 Markdown をファイル先頭のエンベロープに持ち、`check` / `build` / `restore` はそのファイルだけで動く。編集者 (やエージェント) に渡すのは 1 ファイルで済む。同じエンベロープを分離 JSON (`.gospelo.json`) として書くこともできる |
 | 原文の保持 | 取り込み時点の Markdown をエンベロープのページ 0 にそのまま保持し、`restore` で取り出せる |
 | レポート | ページごとの使用量と残り、表の行やリスト項目の高さ、図の縮小率、警告、送りの予定 |
+| PDF と PPTX | `build --pdf` は Chromium で用紙サイズのまま印刷。`build --pptx` は見た目を固定した PowerPoint を書く: 1 ページ 1 枚の画像スライド (同じ Chromium の描画)、見えないリンク領域、任意の透明テキスト層。PowerPoint 上で編集はできない (下の「PPTX 出力」を参照) |
 
 ## 前提
 
@@ -60,8 +61,8 @@ uv run $S import docs/handover.md -o out/handover.gospelo.html --page 16x9 --fon
 # 2. out/handover.gospelo.html 先頭のエンベロープを編集 (例: p05 の表に行を追加) し、送りの予定を確認
 uv run $S check out/handover.gospelo.html --report out/report.json
 
-# 3. 同じファイルを再生成 (PDF も)。はみ出しは続きページへ送られ、ファイルに書き戻される
-uv run $S build out/handover.gospelo.html --pdf out/handover.pdf
+# 3. 同じファイルを再生成 (PDF と PPTX も)。はみ出しは続きページへ送られ、ファイルに書き戻される
+uv run $S build out/handover.gospelo.html --pdf out/handover.pdf --pptx out/handover.pptx
 
 # いつでも原文 Markdown に戻せる
 uv run $S restore out/handover.gospelo.html -o out/handover.original.md
@@ -135,11 +136,30 @@ uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/hando
 | `--hr-break` | off | スライド形式で `---` を改ページとして扱う |
 | `--embed-images` | off | 画像を data URI で埋め込む |
 | `--date` | 当日 | フッターの日付。`none` で非表示 |
+| `--pptx PATH` | | `build`: PPTX も書く。各ページが用紙サイズの画像スライド 1 枚になり、`<a href>` は見えないクリック領域になる |
+| `--pptx-dpi N` | `200` | スライド画像の解像度 |
+| `--pptx-image` | `jpg` | スライド画像の形式。`jpg` (小さい) か `png` (鮮明) |
+| `--pptx-text` | off | 透明な選択可能テキスト層を重ねる (検索・コピーが可能。ビューアによっては薄い二重表示に見える) |
+| `--pptx-no-links` | off | リンク領域を付けない |
 | `--report PATH` | | 容量レポートを JSON で書く |
 | `--reflow` | | `build`: ページ割りをやり直す。`.gospelo.json` 入力なら JSON を書き換えて終了、`.gospelo.html` 入力なら再生成まで行う |
 | `--no-write-back` | | `build`: 自動送りを `.gospelo.json` 入力に書き戻さない |
 
 `check` と `build` の入力は `.gospelo.html` か `.gospelo.json` です。ファイルに記録されたレイアウトが既定値になり、`--layout` と CLI オプションはそれを上書きします。`build out.gospelo.html` は同じファイルを再生成し、`build out.gospelo.json` は `out.gospelo.html` を書きます。
+
+### PPTX 出力: できることとできないこと
+
+`--pptx` は **見た目を固定したスライド** を作ります。各ページはレイアウトを検証したのと同じ Chromium が描いた 1 枚の画像で、どの環境でも HTML や PDF と同じ見た目になります。配布のための形式であり、編集のための形式ではありません。
+
+向いている場面:
+
+- 相手が `.pptx` しか開けない (提出システム、社内ビューア、Teams や SharePoint のプレビュー) が、レイアウトとフォントは崩したくないとき。PowerPoint は無いフォントを置き換えるため、特に日本語は字面や行送りが変わります。画像なら変わりません。
+- 最終稿の提案書やデザインカンプを渡すとき、文字を動かされたり体裁を変えられたりしたくないとき。
+- PDF ではなくスライドショー (投影とページ送り) が必要なとき。
+
+向いていない場面: 相手が PowerPoint 上で文字、表、図を直したい場合。このスライドには編集できる要素がありません。代わりに `.gospelo.html` を直して `build` し直してください。その他の制約: 既定の 200dpi で 1 スライド約 100 〜 200KB (`--pptx-dpi 150` で半分程度)。スクリーンリーダーや検索には `--pptx-text` の透明テキスト層が無いと何も見えず、その層はビューアによって (Slack のプレビュー、Google スライド) 薄い二重表示に見えることがあります。ハイパーリンクは見えないクリック領域として動きます。
+
+編集可能なネイティブ PPTX (実測したレイアウトからテキストボックスや表を配置する方式) は別モードとして計画中です。必要なブロック構造と実測座標はすでにあります。
 
 終了コード: `0` 成功 (自動送りを含む)、`1` 入力または依存関係のエラー、`2` 検証が収束しない。
 
@@ -210,7 +230,7 @@ md2html/
 └── docs/                                # QUICKSTART、DESIGN、ARCHITECTURE、MIGRATION (英日)、spec/gospelo-document
 ```
 
-テストは `uv run --with pytest --with markdown-it-py --with mdit-py-plugins pytest -q tests` で実行します。
+テストは `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx pytest -q tests` で実行します。
 
 ## ライセンス
 

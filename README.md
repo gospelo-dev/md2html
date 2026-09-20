@@ -4,7 +4,7 @@
 
 <p align="center"><img src="https://github.com/gospelo-dev/md2html/blob/main/assets/hero.jpg?raw=true" alt="gospelo-md2html: Markdown + Mermaid to paginated slides and documents, editable JSON, original kept" width="820"></p>
 
-Turn Markdown + Mermaid into **layout-aware, paginated HTML slide decks and documents** that an **AI agent can edit and rebuild as they are**, and that **keep the original Markdown inside**. This is not a plain Markdown-to-HTML converter.
+Turn Markdown + Mermaid into **layout-aware, paginated slide decks and documents, delivered as one self-contained HTML file, as PDF and as PPTX**, that an **AI agent can edit and rebuild as they are**, and that **keep the original Markdown inside**. The name says HTML; the HTML is the master document, and every other format is produced from it. This is not a plain Markdown-to-HTML converter.
 
 日本語版: [README_ja.md](https://github.com/gospelo-dev/md2html/blob/main/README_ja.md)
 
@@ -32,6 +32,7 @@ New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/
 | Gospelo Document | One `.gospelo.html` carries its content, layout and original Markdown in an envelope at the top of the file; `check`, `build` and `restore` work from that file alone, so one file is all an editor (or an agent) needs. An optional `.gospelo.json` sidecar holds the same envelope |
 | Original preserved | The Markdown as imported is kept verbatim as page 0 of the envelope; `restore` gets it back |
 | Report | Per-page used / remaining height, row and item heights, figure scale, warnings, and planned spills |
+| PDF and PPTX | `build --pdf` prints through Chromium at the page size; `build --pptx` writes a fixed-appearance PowerPoint deck: one image slide per page (same Chromium rendering), invisible link hotspots, optional transparent selectable-text layer. Not editable in PowerPoint; see "PPTX export" below |
 
 ## Prerequisites
 
@@ -61,8 +62,8 @@ uv run $S import docs/handover.md -o out/handover.gospelo.html --page 16x9 --fon
 #    then see what will spill
 uv run $S check out/handover.gospelo.html --report out/report.json
 
-# 3. Rebuild the same file (+ PDF). Overflow is spilled to continuation pages and written back into the file.
-uv run $S build out/handover.gospelo.html --pdf out/handover.pdf
+# 3. Rebuild the same file (+ PDF and PPTX). Overflow is spilled to continuation pages and written back into the file.
+uv run $S build out/handover.gospelo.html --pdf out/handover.pdf --pptx out/handover.pptx
 
 # Roll back to the original Markdown at any time
 uv run $S restore out/handover.gospelo.html -o out/handover.original.md
@@ -136,11 +137,30 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--hr-break` | off | Treat `---` as a page break in slide formats |
 | `--embed-images` | off | Inline images as data URIs |
 | `--date` | today | Footer date, or `none` |
+| `--pptx PATH` | | `build`: also write a PPTX. Each page becomes one image slide at the page size; every `<a href>` becomes an invisible clickable hotspot |
+| `--pptx-dpi N` | `200` | Slide image resolution |
+| `--pptx-image` | `jpg` | `jpg` (smaller) or `png` (crisper) slide images |
+| `--pptx-text` | off | Add a transparent selectable-text layer (searchable, copyable; some viewers show it as faint doubled text) |
+| `--pptx-no-links` | off | Skip the link hotspots |
 | `--report PATH` | | Write the capacity report as JSON |
 | `--reflow` | | `build`: re-paginate from scratch. With a `.gospelo.json` input it rewrites the JSON and exits; with a `.gospelo.html` input it rebuilds the file |
 | `--no-write-back` | | `build`: do not write spills back to a `.gospelo.json` input |
 
 `check` and `build` take a `.gospelo.html` or a `.gospelo.json`. The layout recorded in the file is the default and `--layout` / CLI options override it; `build out.gospelo.html` rewrites the same file by default, and `build out.gospelo.json` writes `out.gospelo.html`.
+
+### PPTX export: what you get and what you do not
+
+`--pptx` produces **fixed-appearance slides**: each page is one picture, rendered by the same Chromium that verified the layout, so the deck looks exactly like the HTML and the PDF, on any machine. It is a delivery format, not an editing format.
+
+Use it when:
+
+- the recipient can only open `.pptx` (submission portals, corporate viewers, Teams or SharePoint previews), but you want the layout and fonts to survive untouched. PowerPoint substitutes missing fonts, which reshapes Japanese text in particular; a picture does not change;
+- you hand over a final proposal or design comp and do not want the text moved or restyled;
+- you need a slide show (projection with page transitions) rather than a PDF.
+
+Do not use it when the recipient needs to edit text, tables or diagrams in PowerPoint: nothing on these slides is editable. Edit the `.gospelo.html` and run `build` again instead. Other limits: about 100 to 200 KB per slide at the default 200 dpi (`--pptx-dpi 150` halves it); screen readers and search see nothing unless `--pptx-text` adds the transparent text layer, which some viewers (Slack previews, Google Slides) show as faint doubled text; hyperlinks work as invisible clickable areas.
+
+A native, editable PPTX (text boxes and tables placed from the measured layout) is planned as a separate mode; the block model and measured geometry already exist for it.
 
 Exit codes: `0` success (spills included), `1` input or dependency error, `2` verification did not converge.
 
@@ -211,7 +231,7 @@ md2html/
 └── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
 ```
 
-Run the tests with `uv run --with pytest --with markdown-it-py --with mdit-py-plugins pytest -q tests`.
+Run the tests with `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx pytest -q tests`.
 
 ## License
 

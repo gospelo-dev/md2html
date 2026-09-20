@@ -93,6 +93,7 @@ uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 # Gospelo Document を書き、そこから PDF を生成
 uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 uv run $S build  out/architecture.gospelo.html --pdf out/architecture.pdf
+uv run $S build  out/architecture.gospelo.html --pptx out/architecture.pptx   # PowerPoint (1 ページ 1 枚の画像スライド)
 ```
 
 スライドにするには `--page 16x9` (または `4x3`) を指定します。本文の既定が 14pt になり、`h2` ごとに 1 枚のスライドになります。

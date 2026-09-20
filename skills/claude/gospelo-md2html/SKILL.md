@@ -2,12 +2,14 @@
 name: gospelo-md2html
 description: >
   Turn Markdown + Mermaid into layout-aware, paginated HTML slide decks
-  (16:9, 4:3) and documents (A4 / A3, portrait or landscape) plus PDF, with a
-  chosen body font size. The output is one self-contained .gospelo.html
+  (16:9, 4:3) and documents (A4 / A3, portrait or landscape) plus PDF and a
+  fixed-appearance PPTX (one image slide per page with link hotspots; not
+  editable in PowerPoint), with a chosen body font size. The output is one self-contained .gospelo.html
   (a Gospelo Document): its content (one JSON object per page) and layout sit
   at the top of the file, so the file can be edited and rebuilt on its own;
   the original Markdown is preserved inside. Use this skill when the user says
-  "md2html", "markdown to html", "markdown to pdf", "A4 で出力",
+  "md2html", "markdown to html", "markdown to pdf", "markdown to pptx",
+  "パワポにする", "A4 で出力",
   "スライドにする", "16:9", "4:3", "印刷用", "ページ区切り",
   "文字サイズを指定して HTML", or wants to edit a page of a generated document.
 ---
@@ -53,6 +55,10 @@ uv run <skill>/scripts/md2html.py setup
    `restore` で原文を取り出してから `import --force`。
 9. 0.2 より前の md2html が書いた HTML / JSON は読めない (エラーに移行手順の URL が出る)。
    `scripts/extract_markdown.py` で原文を取り出して `import` し直す。
+10. `--pptx` を使うときは、利用者に「各ページを画像にした見た目固定の PPTX で、PowerPoint 上で
+    文字や表は編集できない。編集は `.gospelo.html` を直して `build` し直す」と必ず伝える。
+    相手が PowerPoint で編集したい場合には向かない。フォント置換を避けたい配布や、`.pptx`
+    指定の提出先に向く。検索やコピーが必要なら `--pptx-text` を付ける。
 
 ## コマンド
 
@@ -61,7 +67,7 @@ S=<skill>/scripts/md2html.py
 uv run $S import  INPUT.md --page 16x9 --font-size 14pt [--dry-run] [--force]   # INPUT.gospelo.html を書く
 uv run $S import  INPUT.md -o out/deck.gospelo.html --page 16x9 --font-size 14pt
 uv run $S check   out/deck.gospelo.html --report report.json                      # 何も書かない
-uv run $S build   out/deck.gospelo.html [--pdf out/deck.pdf] [--reflow] [--font-size 12pt]   # 同じファイルを再生成
+uv run $S build   out/deck.gospelo.html [--pdf out/deck.pdf] [--pptx out/deck.pptx] [--reflow] [--font-size 12pt]   # 同じファイルを再生成 (PDF / PPTX も)
 uv run $S restore out/deck.gospelo.html -o original.md
 uv run $S import  INPUT.md -o content.gospelo.json --page a4   # 分離 JSON (任意)。build で HTML にする
 python <skill>/scripts/extract_markdown.py old.html -o original.md   # 旧形式からの移行

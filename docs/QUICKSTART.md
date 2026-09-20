@@ -93,6 +93,7 @@ uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 # Write the Gospelo Document, then a PDF from it
 uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 uv run $S build  out/architecture.gospelo.html --pdf out/architecture.pdf
+uv run $S build  out/architecture.gospelo.html --pptx out/architecture.pptx   # PowerPoint (one image slide per page)
 ```
 
 For slides use `--page 16x9` (or `4x3`); the default body size becomes 14pt and each `h2` becomes one slide.

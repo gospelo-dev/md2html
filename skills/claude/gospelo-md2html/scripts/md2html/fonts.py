@@ -80,7 +80,8 @@ def inline_runs(text: str) -> list[tuple[str, str]]:
 
 def character_sets(blocks: Iterable[dict[str, Any]], titles: Iterable[str], extra: str = "") -> dict[str, str]:
     """Text per face role for a document: body (everything), bold, code."""
-    parts: dict[str, list[str]] = {BODY: [ALWAYS, extra], BOLD: [ALWAYS, extra], CODE: [ASCII]}
+    # code gets ALWAYS too: a split code block carries its "(続き)" note inside <pre class="code">
+    parts: dict[str, list[str]] = {BODY: [ALWAYS, extra], BOLD: [ALWAYS, extra], CODE: [ASCII, ALWAYS]}
 
     def inline(text: str, bold: bool = False) -> None:
         for kind, s in inline_runs(text):
@@ -165,6 +166,7 @@ def subset_woff2(path: Path, text: str) -> bytes:
     opts.layout_features = ["*"]
     opts.name_IDs = ["*"]
     opts.notdef_outline = True
+    opts.drop_tables.append("meta")  # BIZ UD carries a 'meta' table fontTools cannot subset; drop it silently
     s = subset.Subsetter(opts)
     s.populate(text=text)
     s.subset(font)

@@ -139,3 +139,23 @@ def test_reflow_merges_continued_tables():
               "blocks": [{"type": "table", "header": ["h"], "rows": [["2"]], "continued": True}]}]
     flat = flatten_for_reflow(pages)
     assert len(flat) == 1 and flat[0]["rows"] == [["1"], ["2"]]
+
+
+def test_reflow_restores_slide_section_headings():
+    # slides: h2 became the page title and was dropped from the blocks; the page after the
+    # cover carries the document title (from the h1) and continuation pages repeat the title
+    para = {"type": "paragraph", "text": "x"}
+    pages = [{"id": "p01", "kind": "cover", "title": None, "continued": False,
+              "blocks": [{"type": "heading", "level": 1, "text": "Doc"}]},
+             {"id": "p02", "kind": "content", "title": "Doc", "continued": False, "blocks": [para]},
+             {"id": "p03", "kind": "content", "title": "1. Intro", "continued": False, "blocks": [para]},
+             {"id": "p04", "kind": "content", "title": "1. Intro", "continued": True, "blocks": [para]},
+             {"id": "p05", "kind": "content", "title": "2. Next", "continued": False, "blocks": [para]}]
+    flat = flatten_for_reflow(pages)
+    assert [(b["type"], b.get("text")) for b in flat] == [
+        ("heading", "Doc"), ("paragraph", "x"), ("heading", "1. Intro"), ("paragraph", "x"),
+        ("paragraph", "x"), ("heading", "2. Next"), ("paragraph", "x")]
+    assert flat[2]["level"] == 2
+    # portrait documents keep h2 as blocks and have no page titles: nothing is added
+    plain = [{"id": "p1", "kind": "content", "title": None, "continued": False, "blocks": [para]}]
+    assert flatten_for_reflow(plain) == [para]

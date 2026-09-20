@@ -14,6 +14,8 @@
       if (!window.mermaid) { throw new Error("mermaid library is not loaded"); }
       // Diagram text uses the document's body font stack (not Mermaid's Trebuchet default), so
       // Japanese labels resolve to the same embeddable font as the body in the PDF.
+      // initialize() must run synchronously, before any await: Mermaid's default startOnLoad
+      // would otherwise draw every diagram itself on the load event with its own config.
       window.mermaid.initialize({
         startOnLoad: false,
         theme: "base",
@@ -23,6 +25,12 @@
           fontFamily: getComputedStyle(document.body).fontFamily
         }
       });
+    }
+    // Embedded font subsets load asynchronously even from data URIs. Mermaid measures
+    // label widths when it draws, and Python measures block heights after this script, so
+    // both must see the final fonts or labels get clipped and heights come out wrong.
+    if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
+    if (mermaidNodes.length > 0) {
       await window.mermaid.run({ nodes: mermaidNodes, suppressErrors: false });
     }
     var imgs = Array.prototype.slice.call(document.querySelectorAll("figure.figure img"));

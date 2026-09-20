@@ -101,7 +101,7 @@ def test_character_sets_route_text_to_the_faces_that_render_it():
         assert ch in sets["bold"], ch
     for ch in "本文値項子":
         assert ch not in sets["bold"], ch
-    for ch in "コード挨拶print(')":
+    for ch in "コード挨拶print(')続き":   # (続き) is rendered inside split code blocks
         assert ch in sets["code"], ch
     assert "見" not in sets["code"] and "コ" not in sets["body"]
 

@@ -752,11 +752,19 @@ def _balance_region(reg: Region, ctx: PaginateContext) -> None:
 
 
 def flatten_for_reflow(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Concatenate all blocks, merging continued tables/code with their predecessor."""
+    """Concatenate all blocks, merging continued tables/code with their predecessor.
+
+    Slide formats turn every h2 into a page title and drop the heading block, so a
+    titled page that is not a continuation gets its h2 back here; the page right
+    after the cover carries the document title, which the h1 already provides."""
     blocks: list[dict[str, Any]] = []
+    prev_kind: str | None = None
     for page in pages:
         if page["kind"] == "source":
             continue
+        if page["kind"] == "content" and page.get("title") and not page.get("continued") and prev_kind != "cover":
+            blocks.append({"type": "heading", "level": 2, "text": page["title"]})
+        prev_kind = page["kind"]
         for b in page["blocks"]:
             if b.get("continued") and blocks and blocks[-1]["type"] == b["type"]:
                 prev = blocks[-1]

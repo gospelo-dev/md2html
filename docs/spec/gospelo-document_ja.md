@@ -1,10 +1,10 @@
-# Gospelo Document 形式 バージョン 1 (草案)
+# Gospelo Document 形式 バージョン 1
 
 Gospelo Document は、ページ割りされた文書 (A4、A3、16:9、4:3) の編集可能な全データを 1 つの HTML ファイルの中に持つ形式である。ファイルはどのブラウザでも開け、先頭付近の JSON オブジェクトを書き換えることで編集でき、その JSON だけから `gospelo-md2html` が再生成できる。本書はコンテナ、エンベロープ (JSON オブジェクト)、読み手と書き手が守る規則を定義する。
 
-「〜しなければならない (MUST)」「〜すべきである (SHOULD)」「〜してもよい (MAY)」は RFC 2119 の意味で使う。JSON Schema は同じディレクトリの `gospelo-document.schema.json`。
+「〜しなければならない (MUST)」「〜すべきである (SHOULD)」「〜してもよい (MAY)」は RFC 2119 の意味で使う。JSON Schema はスキルに同梱の `skills/claude/gospelo-md2html/references/gospelo-document.schema.json`。
 
-状態: 草案 1、2026-09-21。現在の `gospelo-md2html` の出力はこの草案と異なる。差分は 9 節にまとめる。
+状態: バージョン 1、2026-09-21。gospelo-md2html 0.2.0 で実装済み。以前のリリースからの変更点は 9 節にまとめる。
 
 ## 1. 形態
 
@@ -44,9 +44,10 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 <body>
 <section class="page" data-page-id="p01">...</section>
 ...
+<!-- Mermaid <version> | MIT License | ... -->
+<script>...mermaid.min.js (Mermaid ブロックがある場合)...</script>
 <script>...figures.js...</script>
 <script>...ページ番号...</script>
-<script>...mermaid.min.js (Mermaid ブロックがある場合)...</script>
 </body>
 </html>
 ```
@@ -57,8 +58,8 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 2. 1 行目は `<!DOCTYPE html>`、2 行目はコメント `<!-- gospelo-document 1 -->` でなければならない。拡張子に関係なく先頭 64 バイトで形式を識別できるようにするため。
 3. `<html>` 要素は `data-gospelo-document="1"` を持たなければならず、`meta.lang` と同じ `lang` を持つべきである。
 4. エンベロープは `<head>` 内に `<script type="application/json" id="gospelo-document">` としてちょうど 1 回、すべての `<style>` と他のすべての `<script>` より前に埋め込まなければならない。読み手はこの開始タグの後の最初の `</script>` で読み込みを打ち切ってよい。
-5. エンベロープ内のすべての `<` は `<` と書かなければならない。これにより `</script` の並びはブロック内に現れず、開始タグの後の最初の `</script>` が終端になる。書き手は `>` を `>`、`&` を `&` にもエスケープすべきである。
-6. 大きな静的資産 (Mermaid ライブラリ、`figures.js`、ページ番号スクリプト) は `<body>` の末尾、描画済みページの後に置かなければならない。
+5. エンベロープ内のすべての `<` は `\u003c` と書かなければならない。これにより `</script` の並びはブロック内に現れず、開始タグの後の最初の `</script>` が終端になる。書き手は `>` を `\u003e`、`&` を `\u0026` にもエスケープすべきである。
+6. 大きな静的資産 (Mermaid ライブラリ、`figures.js`、ページ番号スクリプト) は `<body>` の末尾、描画済みページの後に置かなければならない。Mermaid ライブラリがある場合はその直前にライセンス表示のコメントを置き、`figures.js` より前に置く。
 7. 描画済みページはビルドのたびにエンベロープから再生成しなければならない。読み手は描画済み DOM をソースデータとして扱ってはならない。
 8. 各描画済みページは、対応するページの `id` と同じ `data-page-id` を持たなければならない。レポートや編集が両者を参照できるようにするため。
 9. 書き手は人が読むための `<script type="text/markdown" id="gospelo-source">` を追加してもよい。これは参考情報であり、正本はエンベロープ内のソースページである。
@@ -69,7 +70,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 {
   "format": "gospelo-document",
   "version": 1,
-  "generator": "gospelo-md2html 0.1.0",
+  "generator": "gospelo-md2html 0.2.0",
   "meta": { "title": "...", "date": "2026-09-21", "source": "report.md", "lang": "ja" },
   "layout": { "page": "16x9", "fontSize": "14pt", "columns": "two" },
   "pages": [
@@ -106,7 +107,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 
 準拠する読み手は次のとおり動作する。
 
-1. ファイルを開き、チャンク単位で読む。先頭 64 バイトに `gospelo-document` が無ければ、ファイル全体の走査にフォールバックしてよい (9 節の旧形式)。
+1. ファイルを開き、64 KB のチャンクを 1 つ読む。エンベロープの開始タグはそのチャンク内になければならず、無ければ読み手はファイルを拒否する (9 節)。
 2. `<script type="application/json" id="gospelo-document">` と、その後の `</script>` を見つけ、間の JSON を解析して読み込みを終える。
 3. `format` が `gospelo-document` でない、または `version` が未対応なら拒否する。
 4. スキーマで検証する。`extras` の中を除き、未知のキーはエラーとする。
@@ -133,12 +134,12 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 ## 8. 資産
 
 - 画像は `src` でファイルからの相対パスを参照するか、`layout.embedImages` が真なら `data:` URI で埋め込む。
-- Mermaid ライブラリは `layout.mermaidLib` が `embed` (既定) で、文書に `mermaid` ブロックが 1 つ以上あるときに埋め込む。`link` ではファイルの隣の `mermaid.min.js` を参照する。Mermaid 図はソースのまま保持し、ブラウザで描画する。事前描画はしない。
+- Mermaid ライブラリは `layout.mermaidLib` が `embed` (既定) で、文書に `mermaid` ブロックが 1 つ以上あるときに埋め込む。`link` ではファイルの隣の `mermaid-<version>.min.js` を参照する (`LICENSE.mermaid-<version>.txt` を併置)。使った版は `layout.mermaidVersion` に記録し、再生成のたびに同じ版を使う。Mermaid 図はソースのまま保持し、ブラウザで描画する。事前描画はしない。
 - フォントは埋め込まない。例外は Mermaid ソースの `fa:` アイコンに必要な Font Awesome のサブセット。
 
-## 9. 現在の gospelo-md2html 出力との差分 (旧形式)
+## 9. 本形式より前に書かれたファイル
 
-本形式より前に `gospelo-md2html` が書いたファイルは、5 節 手順 1 のフォールバックで読める。
+0.2.0 より前の `gospelo-md2html` が書いたファイルを準拠する読み手は読まない。それらは取り込んだ Markdown を内部に持つので、移行は「取り出して (`scripts/extract_markdown.py`) `import` し直す」である。`docs/MIGRATION_ja.md` を参照。
 
 | 旧形式 | バージョン 1 |
 | --- | --- |
@@ -149,7 +150,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 | レイアウトの `columns` と `fontSize` は既定時 `null` | 同じ。`null` は「用紙の既定値を使う」 |
 | 拡張子 `.html` | `.gospelo.html` (単体)、`.gospelo.json` (分離)。素の `.html` も読める |
 
-読み手は移行期間として旧 id (`page-0`、`md2html-content`、`md2html-layout`) を別名として受け付けるべきであり、書き手はバージョン 1 の形だけを書き出さなければならない。
+読み手は以前の id (`page-0`、`md2html-content`、`md2html-layout`) を受け付けてはならず、代わりに移行手順の URL を報告する。書き手はバージョン 1 の形だけを書き出さなければならない。
 
 ## 10. 準拠チェックリスト
 
@@ -157,7 +158,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 - [ ] `<html data-gospelo-document="1" lang="...">`
 - [ ] `#gospelo-document` スクリプトが `<head>` 内にちょうど 1 つ、スタイルとスクリプトより前
 - [ ] エンベロープが `gospelo-document.schema.json` を通る
-- [ ] エンベロープ内の `<` が `<`
+- [ ] エンベロープ内の `<` `>` `&` が `\u003c` `\u003e` `\u0026`
 - [ ] 描画済み `section.page` の id が `pages[].id` と一致
 - [ ] 大きなスクリプトが `<body>` 末尾
 - [ ] `meta.source` がファイルからの相対パス

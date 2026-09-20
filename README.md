@@ -11,12 +11,12 @@ Turn Markdown + Mermaid into **layout-aware, paginated HTML slide decks and docu
 Most Markdown-to-PDF tools flow text into a browser's print engine and hope for the best: headings land at the bottom of a page, tables split anywhere, diagrams shrink or overflow, and once the HTML exists nobody can adjust a single page without regenerating everything. This skill is built around three things:
 
 1. **Layout-aware pagination.** `import` renders every block in headless Chromium to get real heights and paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, two columns on landscape paper) into 16:9 / 4:3 slides or A4 / A3 documents.
-2. **Editable by an AI.** Content lives in a **content JSON** (one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source) that is also embedded in the generated HTML. An agent edits the page in question and runs `build`; it can do the same when all it has is the HTML file. Anything that no longer fits is spilled to a continuation page with the same title, and the JSON always matches the output.
-3. **The original is preserved.** The Markdown as imported is kept verbatim inside the JSON and the HTML; `restore` gets it back at any time, and a fresh `import` from it undoes every edit.
+2. **Editable by an AI.** The output is one `.gospelo.html` (a **Gospelo Document**) whose content sits at the top of the file as JSON: one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source. An agent edits the page in question and runs `build` on that same file. Anything that no longer fits is spilled to a continuation page with the same title, and the JSON always matches the rendered pages.
+3. **The original is preserved.** The Markdown as imported is kept verbatim inside the file; `restore` gets it back at any time, and a fresh `import` from it undoes every edit.
 
 Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid is rendered in the browser by an embedded Mermaid.js, so diagrams stay editable all the way to the final file.
 
-New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md) ([日本語](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md)). The typographic rules behind the layout (font-size scale, margins, columns, figure placement) are explained in [docs/design/design_theory.md](https://github.com/gospelo-dev/md2html/blob/main/docs/design/design_theory.md) (Japanese), which is itself built with this skill into a 16:9 deck.
+New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md) ([日本語](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md)). The typographic rules and their sources are in [docs/DESIGN.md](https://github.com/gospelo-dev/md2html/blob/main/docs/DESIGN.md), the single-file design in [docs/ARCHITECTURE.md](https://github.com/gospelo-dev/md2html/blob/main/docs/ARCHITECTURE.md), and the file format in [docs/spec/gospelo-document.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document.md).
 
 ## What you get
 
@@ -29,8 +29,8 @@ New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/
 | Real measurement | Heights are measured in Chromium (Playwright), never estimated; a verify pass checks every page for overflow |
 | Editable content | Page-scoped JSON; table rows, list items and Mermaid source are plain data |
 | Auto spill | Content that stops fitting after an edit moves to a `(continued)` page; nothing is deleted or forced |
-| Self-contained HTML | The HTML embeds its own content JSON and layout; `check out.html` / `build out.html` verify and regenerate it from that alone, so one file is all an editor (or an agent) needs |
-| Original preserved | The Markdown as imported is kept verbatim as page 0 inside the JSON and inside the HTML; `restore` gets it back |
+| Gospelo Document | One `.gospelo.html` carries its content, layout and original Markdown in an envelope at the top of the file; `check`, `build` and `restore` work from that file alone, so one file is all an editor (or an agent) needs. An optional `.gospelo.json` sidecar holds the same envelope |
+| Original preserved | The Markdown as imported is kept verbatim as page 0 of the envelope; `restore` gets it back |
 | Report | Per-page used / remaining height, row and item heights, figure scale, warnings, and planned spills |
 
 ## Prerequisites
@@ -53,30 +53,30 @@ S=skills/claude/gospelo-md2html/scripts/md2html.py
 # 0. First run only
 uv run $S setup
 
-# 1. Markdown -> content JSON, paginated for 16:9 slides at 14pt (dry-run shows pages and warnings first)
-uv run $S import docs/handover.md -o out/handover.json --page 16x9 --font-size 14pt --dry-run
-uv run $S import docs/handover.md -o out/handover.json --page 16x9 --font-size 14pt
+# 1. Markdown -> out/handover.gospelo.html, paginated for 16:9 slides at 14pt (dry-run shows pages and warnings first)
+uv run $S import docs/handover.md -o out/handover.gospelo.html --page 16x9 --font-size 14pt --dry-run
+uv run $S import docs/handover.md -o out/handover.gospelo.html --page 16x9 --font-size 14pt
 
-# 2. Edit out/handover.json (add a row to a table on page p05, say), then see what will spill
-uv run $S check out/handover.json --page 16x9 --font-size 14pt --report out/report.json
+# 2. Edit the envelope at the top of out/handover.gospelo.html (add a row to a table on page p05, say),
+#    then see what will spill
+uv run $S check out/handover.gospelo.html --report out/report.json
 
-# 3. Build HTML + PDF. Overflow is spilled to continuation pages and written back to the JSON.
-uv run $S build out/handover.json -o out/handover.html --page 16x9 --font-size 14pt --pdf out/handover.pdf
+# 3. Rebuild the same file (+ PDF). Overflow is spilled to continuation pages and written back into the file.
+uv run $S build out/handover.gospelo.html --pdf out/handover.pdf
 
-# Roll back to the original Markdown at any time (from the JSON or the HTML)
-uv run $S restore out/handover.html -o out/handover.original.md
+# Roll back to the original Markdown at any time
+uv run $S restore out/handover.gospelo.html -o out/handover.original.md
 
-# Got only the HTML? It carries its content JSON and layout: edit the
-# <script type="application/json" id="md2html-content"> block, then rebuild in place
-uv run $S check out/handover.html
-uv run $S build out/handover.html --pdf out/handover.pdf
+# Prefer a separate JSON for editing or diffs? Write the sidecar form and build from it
+uv run $S import docs/handover.md -o out/handover.gospelo.json --page 16x9 --font-size 14pt
+uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # writes out/handover.gospelo.html
 ```
 
-Paper and font size are pagination inputs, so pass them to `import` as well. To change them later, run `build --reflow` to re-paginate everything.
+Paper and font size are pagination inputs, so pass them to `import`. They are recorded in the file; to change them later, run `build --reflow --page a4` (for example) to re-paginate everything.
 
-### Content JSON
+### The envelope
 
-One page of a 16:9 deck:
+The first `<script>` of a `.gospelo.html` (and the whole of a `.gospelo.json`) is the envelope: `format`, `version`, `generator`, `meta`, `layout` and `pages`. `pages[0]` is the original Markdown; every other page is one object. One content page of a 16:9 deck:
 
 ```json
 {
@@ -99,7 +99,7 @@ One page of a 16:9 deck:
 }
 ```
 
-Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**bold**`, `` `code` ``, `[link](url)`). Block types: `heading`, `paragraph`, `list`, `table`, `code`, `image`, `mermaid`, `quote`, `html`, `pagebreak`. The schema is in [references/content.schema.json](https://github.com/gospelo-dev/md2html/blob/main/skills/claude/gospelo-md2html/references/content.schema.json).
+Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**bold**`, `` `code` ``, `[link](url)`). Block types: `heading`, `paragraph`, `list`, `table`, `code`, `image`, `mermaid`, `quote`, `html`, `pagebreak`. The envelope schema is [references/gospelo-document.schema.json](https://github.com/gospelo-dev/md2html/blob/main/skills/claude/gospelo-md2html/references/gospelo-document.schema.json); the format is specified in [docs/spec/gospelo-document.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document.md). Files written before 0.2.0 are not read; see [docs/MIGRATION.md](https://github.com/gospelo-dev/md2html/blob/main/docs/MIGRATION.md).
 
 ### Layout JSON (optional)
 
@@ -137,10 +137,10 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--embed-images` | off | Inline images as data URIs |
 | `--date` | today | Footer date, or `none` |
 | `--report PATH` | | Write the capacity report as JSON |
-| `--reflow` | | `build`: re-paginate from scratch. With a JSON input it rewrites the JSON and exits; with an HTML input it rebuilds the HTML |
-| `--no-write-back` | | `build`: do not write spills back to the JSON (JSON input only) |
+| `--reflow` | | `build`: re-paginate from scratch. With a `.gospelo.json` input it rewrites the JSON and exits; with a `.gospelo.html` input it rebuilds the file |
+| `--no-write-back` | | `build`: do not write spills back to a `.gospelo.json` input |
 
-`check` and `build` accept either a content JSON or an HTML produced by `build`. With an HTML input the embedded layout becomes the default and `--layout` / CLI options override it; `build out.html` writes back to the same file by default.
+`check` and `build` take a `.gospelo.html` or a `.gospelo.json`. The layout recorded in the file is the default and `--layout` / CLI options override it; `build out.gospelo.html` rewrites the same file by default, and `build out.gospelo.json` writes `out.gospelo.html`.
 
 Exit codes: `0` success (spills included), `1` input or dependency error, `2` verification did not converge.
 
@@ -179,7 +179,7 @@ The recipient unzips it and runs `python gospelo-md2html/scripts/install.py --pr
 
 - Heights come from a measurement pass: every block is rendered in a hidden flow container at the text column width (and at full width for landscape formats), and Chromium reports block, row, item and line heights.
 - Pages are filled greedily to 98% of the content height. Headings reserve room for the following lines (or the whole figure) so they never end a page. Tables split at row boundaries with the header repeated and never leave fewer than three rows; code splits only above 15 lines; paragraphs split at measured line boundaries with the inline Markdown re-serialised on both sides.
-- Landscape formats reserve a figure slot per page; the first `image` or `mermaid` block goes there and the text flows beside it. Pages without a figure use the full width.
+- Landscape formats use two columns in N order (down the left column, then the right); tables with four or more columns, code and wide figures become full-width bands, and a figure that does not fit the left column floats to the top of an empty right column.
 - A verify pass opens the final HTML, measures each page again, and spills anything that still overflows. `build` keeps your page boundaries and only ever moves content forward into `(continued)` pages.
 
 The design documents behind these rules (page formats, layout logic, content model, decisions) live in the maintainers' working directory and are summarised in the skill's `references/`.
@@ -194,20 +194,21 @@ md2html/
 │   │       ├── SKILL.md                 # Agent Skill definition and workflow
 │   │       ├── scripts/
 │   │       │   ├── md2html.py           # CLI (PEP 723 metadata; run with uv)
-│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, ...
+│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, ...
+│   │       │   ├── extract_markdown.py  # Migration: pull the Markdown out of any file the tool wrote
 │   │       │   └── install.py           # Installer for agent discovery paths
 │   │       └── references/
 │   │           ├── base.css             # Page frame and typography (CSS variables)
 │   │           ├── figures.js           # Browser-side Mermaid rendering and figure sizing
-│   │           ├── content.schema.json  # Content JSON schema
-│   │           ├── layout.schema.json   # Layout JSON schema
+│   │           ├── gospelo-document.schema.json  # Envelope schema (the file format)
+│   │           ├── layout.schema.json   # Layout JSON schema (--layout files)
 │   │           ├── page_formats.md      # Paper sizes, margins, defaults
 │   │           ├── layout_rules.md      # Pagination rules
-│   │           ├── editing_guide.md     # How an agent edits the content JSON
-│   │           └── vendor/              # Mermaid.js, Font Awesome Free (see THIRD_PARTY_NOTICES.md)
+│   │           ├── editing_guide.md     # How an agent edits the envelope
+│   │           └── vendor/              # Mermaid.js (per version), Font Awesome Free (see THIRD_PARTY_NOTICES.md)
 │   └── opencode/README.md
-├── tests/                               # pytest (pagination rules, schema, inline split, import, HTML embedding)
-└── docs/QUICKSTART.md, QUICKSTART_ja.md
+├── tests/                               # pytest (pagination rules, schema, inline split, import, envelope I/O, migration)
+└── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
 ```
 
 Run the tests with `uv run --with pytest --with markdown-it-py --with mdit-py-plugins pytest -q tests`.

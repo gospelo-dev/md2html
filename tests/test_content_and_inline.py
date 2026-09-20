@@ -8,7 +8,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "claude" / "gospelo-md2html" / "scripts"))
 
 from md2html import blocks as blocks_mod  # noqa: E402
-from md2html.content import ContentError, escape_for_script, make_source_page, restore_from_html, validate_content  # noqa: E402
+from md2html.content import (  # noqa: E402
+    ContentError, envelope_script, extract_from_html, get_source_markdown, make_envelope, make_source_page, validate_content,
+)
 from md2html.inline import plain_text, split_inline  # noqa: E402
 from md2html.scale import parse_font_size  # noqa: E402
 
@@ -50,8 +52,10 @@ def test_source_page_must_be_first():
 
 def test_restore_round_trip_through_html():
     md = "# Title\n\n<script>alert(1)</script>\n\nbody"
-    html = f'<html><body><script type="text/markdown" id="page-0" data-source="a.md">\n{escape_for_script(md)}\n</script></body></html>'
-    assert restore_from_html(html) == md
+    d = doc([make_source_page(md), page(id="p02", blocks=[{"type": "paragraph", "text": "y"}])])
+    html = "<html><head>" + envelope_script(make_envelope(d, {"page": "a4"})) + "</head><body></body></html>"
+    got, layout = extract_from_html(html)
+    assert get_source_markdown(got) == md and layout == {"page": "a4"}
 
 
 def test_font_size_units():

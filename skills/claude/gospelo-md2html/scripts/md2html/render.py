@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from . import assets
-from .content import CONTENT_SCRIPT_ID, FIGURE_TYPES, LAYOUT_SCRIPT_ID, embed_json, escape_for_script, strip_runtime_ids
+from .content import FIGURE_TYPES, GENERATOR, SCHEMA_VERSION, SIGNATURE, envelope_script, make_envelope
 from .inline import render_inline
 from .layout import Layout, layout_to_dict
 from .scale import Metrics
@@ -174,12 +174,13 @@ def render_page(page: dict[str, Any], ctx: RenderContext, page_no: int, total: i
         figure = first_figure(page) if mode != "single" else None
         text_blocks = [b for b in page["blocks"] if b is not figure]
         figure_mode = "split" if mode != "single" else "single"
-        col_text = "".join(render_block(b, ctx, figure_mode) for b in text_blocks)
-        cols = f'<div class="column-text">{col_text}</div>'
+        col_text = "\n".join(render_block(b, ctx, figure_mode) for b in text_blocks)
+        cols = f'<div class="column-text">\n{col_text}\n</div>'
         if figure is not None:
-            cols += f'<div class="column-figure">{render_block(figure, ctx, "split")}</div>'
-    return (f'<section class="page" data-page-id="{_esc(pid)}" data-mode="{mode}">{header}'
-            f'<div class="page-body {mode}">{cols}</div>{footer}</section>')
+            cols += f'\n<div class="column-figure">{render_block(figure, ctx, "split")}</div>'
+    # one block per line inside a section so that edits produce block-sized diffs
+    return (f'<section class="page" data-page-id="{_esc(pid)}" data-mode="{mode}">{header}\n'
+            f'<div class="page-body {mode}">\n{cols}\n</div>\n{footer}</section>')
 
 
 def _render_two_columns(page: dict[str, Any], ctx: RenderContext) -> str:
@@ -190,12 +191,13 @@ def _render_two_columns(page: dict[str, Any], ctx: RenderContext) -> str:
     out = []
     for seg in layout:
         if seg["kind"] == "cols":
-            left = "".join(render_block(blocks[i], ctx, "col") for i in seg["left"])
-            right = "".join(render_block(blocks[i], ctx, "col") for i in seg["right"])
-            out.append(f'<div class="segment cols"><div class="col col-left">{left}</div><div class="col col-right">{right}</div></div>')
+            left = "\n".join(render_block(blocks[i], ctx, "col") for i in seg["left"])
+            right = "\n".join(render_block(blocks[i], ctx, "col") for i in seg["right"])
+            out.append(f'<div class="segment cols">\n<div class="col col-left">\n{left}\n</div>\n'
+                       f'<div class="col col-right">\n{right}\n</div>\n</div>')
         else:
-            out.append(f'<div class="segment wide">{render_block(blocks[seg["index"]], ctx, "single")}</div>')
-    return f'<div class="column-text two">{"".join(out)}</div>'
+            out.append(f'<div class="segment wide">\n{render_block(blocks[seg["index"]], ctx, "single")}\n</div>')
+    return f'<div class="column-text two">\n{chr(10).join(out)}\n</div>'
 
 
 def page_mode(page: dict[str, Any], ctx: RenderContext) -> str:
@@ -230,29 +232,48 @@ def header_title(page: dict[str, Any], ctx: RenderContext, doc_title: str) -> st
 # documents
 # --------------------------------------------------------------------------
 
-def _head(ctx: RenderContext, title: str, needs_mermaid: bool, needs_fa: bool, out_dir: Path | None) -> str:
-    """out_dir=None means a temporary (measurement) document: always embed the library."""
-    lib_mode = ctx.layout.mermaid_lib if out_dir is not None else "embed"
+def _head(ctx: RenderContext, title: str, needs_fa: bool, envelope: dict[str, Any] | None, lang: str) -> str:
+    """Gospelo Document head: signature comment, then the envelope as the first
+    script (before every style and other script, so a reader can stop there),
+    then styles. `envelope=None` is the measurement document."""
     m = ctx.metrics
-    parts = [
-        "<!DOCTYPE html>",
-        f'<html lang="ja" data-mermaid-font-size="{m.F * 0.9:.1f}px">',
+    parts = ["<!DOCTYPE html>"]
+    if envelope is not None:
+        parts.append(SIGNATURE)
+    html_attrs = f' lang="{_esc(lang)}" data-mermaid-font-size="{m.F * 0.9:.1f}px"'
+    if envelope is not None:
+        html_attrs += f' data-gospelo-document="{SCHEMA_VERSION}"'
+    parts += [
+        f"<html{html_attrs}>",
         "<head>",
         '<meta charset="UTF-8">',
         f"<title>{_esc(title)}</title>",
-        "<style>\n" + m.css_vars() + assets.base_css() + "\n</style>",
     ]
+    if envelope is not None:
+        parts.append(f'<meta name="generator" content="{_esc(GENERATOR)}">')
+        parts.append(envelope_script(envelope))
+    parts.append("<style>\n" + m.css_vars() + assets.base_css() + "\n</style>")
     if ctx.layout.css:
         parts.append("<style>\n" + Path(ctx.layout.css).read_text(encoding="utf-8") + "\n</style>")
     if needs_fa:
         parts.append(assets.fontawesome_style_tag())
-    if needs_mermaid:
-        parts.append(assets.mermaid_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
     parts.append("</head>")
     return "\n".join(parts)
 
 
-def _effective_layout(layout) -> dict[str, Any]:
+def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, out_dir: Path | None) -> list[str]:
+    """Large static assets go last: the Mermaid library (when the document has
+    diagrams) and figures.js. out_dir=None means a temporary (measurement)
+    document: always embed the library."""
+    parts = []
+    if needs_mermaid:
+        lib_mode = ctx.layout.mermaid_lib if out_dir is not None else "embed"
+        parts.append(assets.mermaid_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
+    parts.append("<script>\n" + assets.figures_js() + "\n</script>")
+    return parts
+
+
+def effective_layout(layout) -> dict[str, Any]:
     """Layout JSON to embed: pins the Mermaid version actually used, so that a
     later `build out.html` renders with the same version (figure sizes, and
     therefore pagination, depend on it)."""
@@ -272,29 +293,21 @@ def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: Rende
     title = doc["meta"]["title"]
     all_blocks = [b for p in pages for b in p["blocks"]]
     needs_mermaid, needs_fa = _needs(all_blocks)
-    head = _head(ctx, title, needs_mermaid, needs_fa, ctx.html_dir)
-    body = ["<body>"]
-    src_page = doc["pages"][0] if doc["pages"][0]["kind"] == "source" else None
-    if src_page is not None:
-        src_attr = f' data-source="{_esc(doc["meta"].get("source") or "")}"'
-        body.append(f'<script type="text/markdown" id="page-0"{src_attr}>\n'
-                    + escape_for_script(src_page["blocks"][0]["text"]) + "\n</script>")
-    # The HTML carries its own content JSON and layout so that `build out.html` can
-    # regenerate it without the original JSON (docs/07 section 9).
-    embedded = {"version": doc["version"], "meta": dict(doc["meta"]),
-                "pages": ([src_page] if src_page is not None else []) + list(pages)}
-    embedded = strip_runtime_ids(embedded)
+    # The file is a Gospelo Document: the envelope (original Markdown as pages[0],
+    # the pages the HTML is rendered from, the effective layout) is the first thing
+    # in <head>, so `build out.gospelo.html` can regenerate the file from itself.
+    envelope = make_envelope(doc, effective_layout(ctx.layout), pages)
     source = doc["meta"].get("source")
     if source and ctx.html_dir is not None:
         md_path = (ctx.image_base / Path(source).name).resolve()
-        embedded["meta"]["source"] = os.path.relpath(md_path, ctx.html_dir.resolve()).replace(os.sep, "/")
-    body.append(f'<script type="application/json" id="{CONTENT_SCRIPT_ID}">\n' + embed_json(embedded) + "\n</script>")
-    body.append(f'<script type="application/json" id="{LAYOUT_SCRIPT_ID}">\n'
-                + embed_json(_effective_layout(ctx.layout)) + "\n</script>")
+        envelope["meta"]["source"] = os.path.relpath(md_path, ctx.html_dir.resolve()).replace(os.sep, "/")
+    lang = doc["meta"].get("lang") or "ja"
+    head = _head(ctx, title, needs_fa, envelope, lang)
+    body = ["<body>"]
     total = len(pages)
     for i, page in enumerate(pages, start=1):
         body.append(render_page(page, ctx, i, total, title, date_text))
-    body.append("<script>\n" + assets.figures_js() + "\n</script>")
+    body += _tail_scripts(ctx, needs_mermaid, ctx.html_dir)
     body.append(assets.page_number_script())
     body.append("</body></html>")
     return head + "\n" + "\n".join(body)
@@ -304,7 +317,7 @@ def render_measure_document(blocks: list[dict[str, Any]], ctx: RenderContext) ->
     """One or two flow containers (text column width and single width)."""
     m = ctx.metrics
     needs_mermaid, needs_fa = _needs(blocks)
-    head = _head(ctx, "measure", needs_mermaid, needs_fa, None)
+    head = _head(ctx, "measure", needs_fa, None, "ja")
     body = ["<body>"]
     widths: list[tuple[str, float, str]] = []
     if m.columns == "two":
@@ -317,6 +330,6 @@ def render_measure_document(blocks: list[dict[str, Any]], ctx: RenderContext) ->
         for b in blocks:
             body.append(render_block(b, ctx, fig_mode))
         body.append("</div>")
-    body.append("<script>\n" + assets.figures_js() + "\n</script>")
+    body += _tail_scripts(ctx, needs_mermaid, None)
     body.append("</body></html>")
     return head + "\n" + "\n".join(body)

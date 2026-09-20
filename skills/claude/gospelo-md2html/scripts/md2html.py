@@ -34,7 +34,7 @@ from md2html.formats import get_format  # noqa: E402
 from md2html.layout import Layout, LayoutError, build_layout  # noqa: E402
 from md2html.measure import Browser, MeasureError, measure_document, verify_document  # noqa: E402
 from md2html.paginate import BlockHeight, PaginateContext, Spill, flatten_for_reflow, paginate, spill_pages  # noqa: E402
-from md2html.render import RenderContext, first_figure, page_mode, render_document, render_measure_document  # noqa: E402
+from md2html.render import RenderContext, effective_layout, first_figure, page_mode, render_document, render_measure_document  # noqa: E402
 from md2html.scale import SAFETY, Metrics, build_metrics  # noqa: E402
 
 EXIT_OK = 0
@@ -81,32 +81,34 @@ def make_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("setup", help="install Chromium for Playwright (first run only)")
 
-    pi = sub.add_parser("import", help="Markdown -> content JSON (paginated)")
+    pi = sub.add_parser("import", help="Markdown -> Gospelo Document (.gospelo.html, paginated and verified)")
     pi.add_argument("input", type=Path)
-    pi.add_argument("-o", "--output", type=Path, help="content JSON path (default: <input>.json)")
-    pi.add_argument("--force", action="store_true", help="overwrite an existing content JSON")
+    pi.add_argument("-o", "--output", type=Path,
+                    help="output path: <name>.gospelo.html (default: next to the input) or a <name>.gospelo.json sidecar")
+    pi.add_argument("--force", action="store_true", help="overwrite an existing output")
     pi.add_argument("--dry-run", dest="dry_run", action="store_true")
     pi.add_argument("--report", type=Path)
     pi.add_argument("--verbose", action="store_true")
     _add_layout_args(pi)
 
-    pc = sub.add_parser("check", help="verify a content JSON and report capacity (writes nothing)")
-    pc.add_argument("content", type=Path)
+    pc = sub.add_parser("check", help="verify a Gospelo Document and report capacity (writes nothing)")
+    pc.add_argument("content", type=Path, help=".gospelo.html or .gospelo.json")
     pc.add_argument("--report", type=Path)
     pc.add_argument("--verbose", action="store_true")
     _add_layout_args(pc)
 
-    pb = sub.add_parser("build", help="content JSON -> HTML (and PDF)")
-    pb.add_argument("content", type=Path)
-    pb.add_argument("-o", "--output", type=Path, help="HTML path (default: <content>.html)")
+    pb = sub.add_parser("build", help="Gospelo Document -> rebuilt .gospelo.html (and PDF)")
+    pb.add_argument("content", type=Path, help=".gospelo.html (rebuilt in place) or .gospelo.json")
+    pb.add_argument("-o", "--output", type=Path, help="HTML path (default: the input HTML, or <name>.gospelo.html next to a JSON)")
     pb.add_argument("--pdf", type=Path)
     pb.add_argument("--report", type=Path)
-    pb.add_argument("--reflow", action="store_true", help="re-paginate everything, rewrite the JSON and exit")
+    pb.add_argument("--reflow", action="store_true",
+                    help="re-paginate everything (HTML input: rebuild in place; JSON input: rewrite the JSON and exit)")
     pb.add_argument("--no-write-back", dest="no_write_back", action="store_true")
     pb.add_argument("--verbose", action="store_true")
     _add_layout_args(pb)
 
-    pr = sub.add_parser("restore", help="write the original Markdown from page 0 of a JSON or HTML")
+    pr = sub.add_parser("restore", help="write the original Markdown from page 0 of a Gospelo Document")
     pr.add_argument("source", type=Path)
     pr.add_argument("-o", "--output", type=Path, required=True)
     return p
@@ -332,7 +334,10 @@ def cmd_import(args: argparse.Namespace) -> int:
     src: Path = args.input
     if not src.is_file():
         raise CliError(f"input not found: {src}")
-    out_path: Path = args.output or src.with_suffix(".json")
+    out_path: Path = args.output or content_mod.default_html_path(src)
+    to_html = content_mod.is_html_path(out_path)
+    if not to_html and out_path.suffix.lower() != ".json":
+        raise CliError(f"output must end in .html (Gospelo Document) or .json (sidecar): {out_path}")
     if out_path.exists() and not args.force and not args.dry_run:
         raise CliError(f"{out_path} already exists; pass --force to overwrite (this discards edits)")
     layout = layout_from_args(args)
@@ -379,6 +384,8 @@ def cmd_import(args: argparse.Namespace) -> int:
     # spills and pushes add pages such as p09-2: renumber sequentially
     old_ids = [[b.get("id") for b in p["blocks"]] for p in final_pages]
     assign_page_ids(final_pages)
+    # the HTML is rendered from the renumbered pages while their column placement is still attached
+    html_text = render_document(doc, final_pages, final_ctx, date) if to_html else None
     _drop_runtime_keys(final_pages)
     doc["pages"] = [doc["pages"][0]] + final_pages
     content_mod.assign_block_ids(doc)
@@ -400,7 +407,10 @@ def cmd_import(args: argparse.Namespace) -> int:
     if args.dry_run:
         print(f"dry run: {out_path} not written")
         return EXIT_OK
-    content_mod.save_content(doc, out_path)
+    if to_html:
+        out_path.write_text(html_text, encoding="utf-8")
+    else:
+        content_mod.save_document(doc, effective_layout(layout), out_path)
     print(f"wrote {out_path}")
     return EXIT_OK
 
@@ -432,11 +442,10 @@ def _notes_dict(notes: blocks_mod.ImportNotes) -> dict[str, Any]:
 
 
 def _prepare_build(args: argparse.Namespace):
-    """Input may be a content JSON or a generated HTML (which embeds its JSON and layout).
-    For HTML the embedded layout is the base; --layout and CLI options override it."""
+    """Input is a Gospelo Document (.gospelo.html or .gospelo.json). Its layout is
+    the base; --layout and CLI options override it."""
     content_path: Path = args.content
-    doc = content_mod.load_content(content_path)
-    embedded_layout = content_mod.load_embedded_layout(content_path)
+    doc, embedded_layout = content_mod.load_document(content_path)
     layout = layout_from_args(args, embedded_layout)
     metrics = metrics_from_layout(layout)
     image_base = resolve_image_base(content_path, doc)
@@ -517,7 +526,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     content_path, doc, layout, metrics, image_base = _prepare_build(args)
     from_html = content_mod.is_html_path(content_path)
     # An HTML input is rebuilt in place by default: the HTML is the document.
-    out_path: Path = args.output or (content_path if from_html else content_path.with_suffix(".html"))
+    out_path: Path = args.output or (content_path if from_html else content_mod.default_html_path(content_path))
     out_dir = out_path.resolve().parent
     out_dir.mkdir(parents=True, exist_ok=True)
     date = date_text(layout, doc["meta"].get("date"))
@@ -547,10 +556,10 @@ def cmd_build(args: argparse.Namespace) -> int:
     if changed and not args.no_write_back:
         if from_html:
             # the rebuilt HTML already embeds the updated pages; there is no separate JSON to write
-            print(f"auto spill applied; the updated content JSON is embedded in {out_path}")
+            print(f"auto spill applied; the updated pages are embedded in {out_path}")
         else:
             doc["pages"] = ([doc["pages"][0]] if doc["pages"][0]["kind"] == "source" else []) + final_pages
-            content_mod.save_content(doc, content_path)
+            content_mod.save_document(doc, effective_layout(layout), content_path)
             print(f"wrote back {content_path} (auto spill)")
     report = report_mod.build_report(metrics, metrics.columns, verify,
                                      [{"from": s.source, "to": s.target, "blocks": s.blocks} for s in spills], warnings)
@@ -584,7 +593,7 @@ def _reflow_doc(doc, layout: Layout, metrics: Metrics, image_base: Path, work_di
 
 def _cmd_reflow(content_path: Path, doc, layout: Layout, metrics: Metrics, image_base: Path, verbose: bool) -> int:
     doc, warnings = _reflow_doc(doc, layout, metrics, image_base, content_path.resolve().parent)
-    content_mod.save_content(doc, content_path)
+    content_mod.save_document(doc, effective_layout(layout), content_path)
     print(f"reflowed {content_path}: {len(content_mod.content_pages(doc))} pages (no HTML written; run build next)")
     for w in warnings:
         print(f"  warning: {w}")

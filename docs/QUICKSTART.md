@@ -88,17 +88,17 @@ OpenCode scans `.opencode/skills/`, `.claude/skills/` and `.agents/skills/` (pro
 S=.claude/skills/gospelo-md2html/scripts/md2html.py
 
 # See how the document will paginate (nothing is written)
-uv run $S import docs/architecture.md -o out/architecture.json --page a4 --dry-run
+uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4 --dry-run
 
-# Write the content JSON, then build HTML and PDF
-uv run $S import docs/architecture.md -o out/architecture.json --page a4
-uv run $S build  out/architecture.json -o out/architecture.html --page a4 --pdf out/architecture.pdf
+# Write the Gospelo Document, then a PDF from it
+uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
+uv run $S build  out/architecture.gospelo.html --pdf out/architecture.pdf
 ```
 
 For slides use `--page 16x9` (or `4x3`); the default body size becomes 14pt and each `h2` becomes one slide.
 
-To edit the result, change `out/architecture.json` (one object per page; see the skill's `references/editing_guide.md`), run `check` to see the remaining capacity and planned spills, then `build` again. Rows and items that stop fitting move to a continuation page automatically.
+To edit the result, change the envelope at the top of `out/architecture.gospelo.html` (one JSON object per page; see the skill's `references/editing_guide.md`), run `check` to see the remaining capacity and planned spills, then `build` again. Rows and items that stop fitting move to a continuation page automatically.
 
-The generated HTML also embeds that JSON and the layout options, so `uv run $S build out/architecture.html` regenerates it from the HTML alone. Handing someone the HTML is enough for them to edit and rebuild it.
+The file carries its content, layout and original Markdown, so `build` regenerates it from the file alone. Handing someone the `.gospelo.html` is enough for them to edit and rebuild it.
 
 In agent workflows you rarely run these by hand: the agent reads [SKILL.md](../skills/claude/gospelo-md2html/SKILL.md) and follows its steps. See the [README](../README.md) for options, the JSON format, and how pagination works.

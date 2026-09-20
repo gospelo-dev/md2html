@@ -1,10 +1,10 @@
-# Gospelo Document format, version 1 (draft)
+# Gospelo Document format, version 1
 
 A Gospelo Document is a paginated document (A4, A3, 16:9, 4:3) whose complete, editable content travels inside a single HTML file. The file opens in any browser, can be edited by changing a JSON object near the top, and can be rebuilt by `gospelo-md2html` from that object alone. This document defines the container, the envelope object, and the rules readers and writers must follow.
 
-Key words MUST, SHOULD and MAY are used in the RFC 2119 sense. The JSON Schema is `gospelo-document.schema.json` next to this file.
+Key words MUST, SHOULD and MAY are used in the RFC 2119 sense. The JSON Schema ships with the skill as `skills/claude/gospelo-md2html/references/gospelo-document.schema.json`.
 
-Status: draft 1, 2026-09-21. The current `gospelo-md2html` output differs from this draft; section 9 lists the differences.
+Status: version 1, 2026-09-21. Implemented by gospelo-md2html 0.2.0. Section 9 lists what changed from earlier releases.
 
 ## 1. Forms
 
@@ -44,9 +44,10 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 <body>
 <section class="page" data-page-id="p01">...</section>
 ...
+<!-- Mermaid <version> | MIT License | ... -->
+<script>...mermaid.min.js (when the document has Mermaid blocks)...</script>
 <script>...figures.js...</script>
 <script>...page numbering...</script>
-<script>...mermaid.min.js (when the document has Mermaid blocks)...</script>
 </body>
 </html>
 ```
@@ -57,8 +58,8 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 2. Line 1 MUST be `<!DOCTYPE html>` and line 2 MUST be the comment `<!-- gospelo-document 1 -->`. This lets a reader identify the format from the first 64 bytes regardless of the file extension.
 3. The `<html>` element MUST carry `data-gospelo-document="1"` and SHOULD carry `lang` equal to `meta.lang`.
 4. The envelope MUST be embedded exactly once as `<script type="application/json" id="gospelo-document">` inside `<head>`, before any `<style>` element and before any other `<script>` element. A reader MAY stop reading the file at the first `</script>` after that opening tag.
-5. Inside the envelope block every `<` MUST be written as `<`. Consequently the sequence `</script` cannot occur inside the block and the first `</script>` after the opening tag is its end. Writers SHOULD also escape `>` as `>` and `&` as `&`.
-6. Large static assets (the Mermaid library, `figures.js`, page numbering) MUST be placed at the end of `<body>`, after the rendered pages.
+5. Inside the envelope block every `<` MUST be written as `\u003c`. Consequently the sequence `</script` cannot occur inside the block and the first `</script>` after the opening tag is its end. Writers SHOULD also escape `>` as `\u003e` and `&` as `\u0026`.
+6. Large static assets (the Mermaid library, `figures.js`, page numbering) MUST be placed at the end of `<body>`, after the rendered pages. The Mermaid library, when present, is preceded by its license notice comment and comes before `figures.js`.
 7. Rendered pages MUST be regenerated from the envelope on every build. A reader MUST NOT treat the rendered DOM as source data.
 8. Each rendered page MUST carry `data-page-id` equal to the `id` of the page it renders, so that reports and edits can refer to both.
 9. A writer MAY additionally include `<script type="text/markdown" id="gospelo-source">` with the raw Markdown for human reading. It is informational: the source of truth is the source page in the envelope.
@@ -69,7 +70,7 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 {
   "format": "gospelo-document",
   "version": 1,
-  "generator": "gospelo-md2html 0.1.0",
+  "generator": "gospelo-md2html 0.2.0",
   "meta": { "title": "...", "date": "2026-09-21", "source": "report.md", "lang": "ja" },
   "layout": { "page": "16x9", "fontSize": "14pt", "columns": "two" },
   "pages": [
@@ -106,7 +107,7 @@ Block `id` values are optional in the file. A reader assigns `<page id>-b<index>
 
 A conforming reader:
 
-1. Opens the file and reads in chunks. If the first 64 bytes do not contain `gospelo-document`, it MAY fall back to scanning the whole file (section 9, legacy).
+1. Opens the file and reads a 64 KB chunk. The envelope's opening tag MUST be inside that chunk; otherwise the reader rejects the file (section 9).
 2. Finds `<script type="application/json" id="gospelo-document">` and the following `</script>`, parses the JSON in between, and stops reading.
 3. Rejects the document if `format` is not `gospelo-document` or `version` is unsupported.
 4. Validates against the schema. Unknown keys are an error except inside `extras`.
@@ -133,12 +134,12 @@ A conforming writer:
 ## 8. Assets
 
 - Images are referenced by `src` as a path relative to the file, or embedded as a `data:` URI when `layout.embedImages` is true.
-- The Mermaid library is embedded when `layout.mermaidLib` is `embed` (default) and the document has at least one `mermaid` block; with `link` a `mermaid.min.js` next to the file is referenced. Mermaid diagrams are stored as source and drawn in the browser; they are never pre-rendered.
+- The Mermaid library is embedded when `layout.mermaidLib` is `embed` (default) and the document has at least one `mermaid` block; with `link` a `mermaid-<version>.min.js` next to the file is referenced (with its `LICENSE.mermaid-<version>.txt`). The version used is recorded in `layout.mermaidVersion` and reused on every rebuild. Mermaid diagrams are stored as source and drawn in the browser; they are never pre-rendered.
 - Fonts are not embedded except the Font Awesome subset needed by `fa:` icons in Mermaid sources.
 
-## 9. Differences from the current gospelo-md2html output (legacy)
+## 9. Files written before this format
 
-Files written by `gospelo-md2html` before this format existed are readable with the fallback in section 5 step 1.
+Files written by `gospelo-md2html` before 0.2.0 are not read by conforming readers. They contain the imported Markdown, so migration is: extract it (`scripts/extract_markdown.py`) and run `import` again. See `docs/MIGRATION.md`.
 
 | Legacy | Version 1 |
 | --- | --- |
@@ -149,7 +150,7 @@ Files written by `gospelo-md2html` before this format existed are readable with 
 | Layout `columns` and `fontSize` written as `null` when defaulted | Same; `null` means "use the page format default". |
 | Extension `.html` | `.gospelo.html` (single file), `.gospelo.json` (sidecar). Plain `.html` remains readable. |
 
-Readers SHOULD accept legacy ids (`page-0`, `md2html-content`, `md2html-layout`) as aliases for one release cycle and writers MUST emit only the version 1 form.
+Readers MUST NOT accept the earlier ids (`page-0`, `md2html-content`, `md2html-layout`); they report the migration URL instead. Writers MUST emit only the version 1 form.
 
 ## 10. Conformance checklist
 
@@ -157,7 +158,7 @@ Readers SHOULD accept legacy ids (`page-0`, `md2html-content`, `md2html-layout`)
 - [ ] `<html data-gospelo-document="1" lang="...">`
 - [ ] Exactly one `#gospelo-document` script, in `<head>`, before styles and scripts
 - [ ] Envelope validates against `gospelo-document.schema.json`
-- [ ] `<` escaped as `<` inside the envelope
+- [ ] `<`, `>` and `&` escaped as `\u003c`, `\u003e`, `\u0026` inside the envelope
 - [ ] Rendered `section.page` ids match `pages[].id`
 - [ ] Large scripts at the end of `<body>`
 - [ ] `meta.source` relative to the file

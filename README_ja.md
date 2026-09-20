@@ -11,12 +11,12 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 一般的な Markdown から PDF への変換は、ブラウザの印刷エンジンに文章を流し込むだけです。見出しがページ末尾に取り残され、表が任意の位置で切れ、図は縮みすぎるかはみ出し、HTML ができた後は 1 ページだけを直すこともできません。このスキルは次の 3 点を軸にしています。
 
 1. **レイアウトを考慮したページ分割。** `import` が全ブロックをヘッドレス Chromium で描画して実寸の高さを取り、組版の規則 (見出しは本文と同じページに、表は行境界で分割してヘッダーを繰り返す、横長の用紙では 2 段に流す) で 16:9 / 4:3 のスライドや A4 / A3 の文書に割り付けます。
-2. **AI で編集できる。** 内容は **コンテンツ JSON** (1 ページ 1 オブジェクト、本文はインライン Markdown、表は `header` + `rows`、Mermaid はソース文字列) として持ち、生成 HTML にも埋め込まれます。エージェントは JSON の該当ページを直して `build` するだけで、HTML 1 ファイルを受け取った場合でも同じことができます。収まらなくなった分は同じタイトルの続きページへ自動で送られ、JSON と出力は常に一致します。
-3. **原文を保持する。** 取り込み時点の Markdown を JSON と HTML の中にそのまま保持し、`restore` でいつでも取り出せます。編集をやり直したいときは原文から `import` し直せます。
+2. **AI で編集できる。** 出力は `.gospelo.html` 1 ファイル (**Gospelo Document**) で、その先頭に内容が JSON として置かれます: 1 ページ 1 オブジェクト、本文はインライン Markdown、表は `header` + `rows`、Mermaid はソース文字列。エージェントは該当ページを直して同じファイルに `build` するだけです。収まらなくなった分は同じタイトルの続きページへ自動で送られ、JSON と描画済みページは常に一致します。
+3. **原文を保持する。** 取り込み時点の Markdown をファイルの中にそのまま保持し、`restore` でいつでも取り出せます。編集をやり直したいときは原文から `import` し直せます。
 
 レイアウトはコンテンツに含めません。用紙、余白、文字階層、段の分割、図の側は CLI オプションか別のレイアウト JSON で与えます。Mermaid は HTML に同梱した Mermaid.js がブラウザで描画するので、最終ファイルまで図が編集可能なままです。
 
-はじめての方は [クイックスタート](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md) ([English](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md)) を参照してください。レイアウトの根拠 (文字サイズからの導出、余白、段組、図の配置) は [docs/design/design_theory.md](https://github.com/gospelo-dev/md2html/blob/main/docs/design/design_theory.md) にまとめてあり、この資料自体を本スキルで 16:9 のスライドにしています。
+はじめての方は [クイックスタート](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md) ([English](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md)) を参照してください。組版の規則とその根拠は [docs/DESIGN_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/DESIGN_ja.md)、1 ファイル構成の設計は [docs/ARCHITECTURE_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/ARCHITECTURE_ja.md)、ファイル形式は [docs/spec/gospelo-document_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document_ja.md) にあります。
 
 ## できること
 
@@ -29,8 +29,8 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 | 実測 | 高さは Chromium (Playwright) で実測し、推定しない。検証パスが全ページのはみ出しを確認する |
 | 編集可能なコンテンツ | ページ単位の JSON。表の行、リスト項目、Mermaid ソースは素のデータ |
 | 自動送り | 編集で収まらなくなった分は「(続き)」ページへ移す。内容を削ったり押し込んだりしない |
-| 自己完結した HTML | HTML 自身がコンテンツ JSON とレイアウト設定を埋め込んでおり、`check out.html` / `build out.html` でその HTML だけから確認と再生成ができる。編集者 (やエージェント) に渡すのは 1 ファイルで済む |
-| 原文の保持 | 取り込み時点の Markdown を JSON と HTML のページ 0 にそのまま保持し、`restore` で取り出せる |
+| Gospelo Document | `.gospelo.html` 1 ファイルが内容、レイアウト、原文 Markdown をファイル先頭のエンベロープに持ち、`check` / `build` / `restore` はそのファイルだけで動く。編集者 (やエージェント) に渡すのは 1 ファイルで済む。同じエンベロープを分離 JSON (`.gospelo.json`) として書くこともできる |
+| 原文の保持 | 取り込み時点の Markdown をエンベロープのページ 0 にそのまま保持し、`restore` で取り出せる |
 | レポート | ページごとの使用量と残り、表の行やリスト項目の高さ、図の縮小率、警告、送りの予定 |
 
 ## 前提
@@ -53,30 +53,29 @@ S=skills/claude/gospelo-md2html/scripts/md2html.py
 # 0. 初回のみ
 uv run $S setup
 
-# 1. Markdown -> コンテンツ JSON。16:9 スライド、本文 14pt (まず --dry-run でページ数と警告を確認)
-uv run $S import docs/handover.md -o out/handover.json --page 16x9 --font-size 14pt --dry-run
-uv run $S import docs/handover.md -o out/handover.json --page 16x9 --font-size 14pt
+# 1. Markdown -> out/handover.gospelo.html。16:9 スライド、本文 14pt (まず --dry-run でページ数と警告を確認)
+uv run $S import docs/handover.md -o out/handover.gospelo.html --page 16x9 --font-size 14pt --dry-run
+uv run $S import docs/handover.md -o out/handover.gospelo.html --page 16x9 --font-size 14pt
 
-# 2. out/handover.json を編集 (例: p05 の表に行を追加) し、送りの予定を確認
-uv run $S check out/handover.json --page 16x9 --font-size 14pt --report out/report.json
+# 2. out/handover.gospelo.html 先頭のエンベロープを編集 (例: p05 の表に行を追加) し、送りの予定を確認
+uv run $S check out/handover.gospelo.html --report out/report.json
 
-# 3. HTML と PDF を生成。はみ出しは続きページへ送られ、JSON に書き戻される
-uv run $S build out/handover.json -o out/handover.html --page 16x9 --font-size 14pt --pdf out/handover.pdf
+# 3. 同じファイルを再生成 (PDF も)。はみ出しは続きページへ送られ、ファイルに書き戻される
+uv run $S build out/handover.gospelo.html --pdf out/handover.pdf
 
-# いつでも原文 Markdown に戻せる (JSON からでも HTML からでも)
-uv run $S restore out/handover.html -o out/handover.original.md
+# いつでも原文 Markdown に戻せる
+uv run $S restore out/handover.gospelo.html -o out/handover.original.md
 
-# HTML しか手元に無い場合: HTML 内の <script type="application/json" id="md2html-content">
-# の JSON を編集し、その HTML を入力にして同じ場所に再生成する
-uv run $S check out/handover.html
-uv run $S build out/handover.html --pdf out/handover.pdf
+# 編集や差分に別ファイルの JSON を使いたい場合: 分離 JSON を書き、そこから build する
+uv run $S import docs/handover.md -o out/handover.gospelo.json --page 16x9 --font-size 14pt
+uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/handover.gospelo.html を書く
 ```
 
-用紙と文字サイズはページ割りの入力なので `import` にも渡します。後から変える場合は `build --reflow` でページ割り全体をやり直します。
+用紙と文字サイズはページ割りの入力なので `import` に渡します。値はファイルに記録されるので、後から変える場合は `build --reflow --page a4` のように指定してページ割り全体をやり直します。
 
-### コンテンツ JSON
+### エンベロープ
 
-16:9 の 1 ページ分:
+`.gospelo.html` の最初の `<script>` (と `.gospelo.json` の全体) がエンベロープです: `format`、`version`、`generator`、`meta`、`layout`、`pages`。`pages[0]` は原文 Markdown、それ以外のページは 1 ページ 1 オブジェクトです。16:9 のコンテンツページ 1 つ分:
 
 ```json
 {
@@ -99,7 +98,7 @@ uv run $S build out/handover.html --pdf out/handover.pdf
 }
 ```
 
-ゲートを 1 つ足すには `rows` に配列を 1 つ追加するだけです。セルの文字列はインライン Markdown (`**太字**`、`` `code` ``、`[link](url)`) をそのまま持ちます。ブロック型は `heading`、`paragraph`、`list`、`table`、`code`、`image`、`mermaid`、`quote`、`html`、`pagebreak`。スキーマは [references/content.schema.json](https://github.com/gospelo-dev/md2html/blob/main/skills/claude/gospelo-md2html/references/content.schema.json) にあります。
+ゲートを 1 つ足すには `rows` に配列を 1 つ追加するだけです。セルの文字列はインライン Markdown (`**太字**`、`` `code` ``、`[link](url)`) をそのまま持ちます。ブロック型は `heading`、`paragraph`、`list`、`table`、`code`、`image`、`mermaid`、`quote`、`html`、`pagebreak`。エンベロープのスキーマは [references/gospelo-document.schema.json](https://github.com/gospelo-dev/md2html/blob/main/skills/claude/gospelo-md2html/references/gospelo-document.schema.json)、形式の仕様は [docs/spec/gospelo-document_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document_ja.md) にあります。0.2.0 より前に書かれたファイルは読めません。[docs/MIGRATION_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/MIGRATION_ja.md) を参照してください。
 
 ### レイアウト JSON (任意)
 
@@ -137,10 +136,10 @@ uv run $S build out/handover.html --pdf out/handover.pdf
 | `--embed-images` | off | 画像を data URI で埋め込む |
 | `--date` | 当日 | フッターの日付。`none` で非表示 |
 | `--report PATH` | | 容量レポートを JSON で書く |
-| `--reflow` | | `build`: ページ割りをやり直す。JSON 入力なら JSON を書き換えて終了、HTML 入力なら再生成まで行う |
-| `--no-write-back` | | `build`: 自動送りを JSON に書き戻さない (JSON 入力のみ) |
+| `--reflow` | | `build`: ページ割りをやり直す。`.gospelo.json` 入力なら JSON を書き換えて終了、`.gospelo.html` 入力なら再生成まで行う |
+| `--no-write-back` | | `build`: 自動送りを `.gospelo.json` 入力に書き戻さない |
 
-`check` と `build` の入力はコンテンツ JSON か、`build` が生成した HTML です。HTML を入力にすると埋め込まれたレイアウト設定が既定値になり、`--layout` と CLI オプションはそれを上書きします。`build out.html` の出力先の既定は同じファイル (その場で再生成) です。
+`check` と `build` の入力は `.gospelo.html` か `.gospelo.json` です。ファイルに記録されたレイアウトが既定値になり、`--layout` と CLI オプションはそれを上書きします。`build out.gospelo.html` は同じファイルを再生成し、`build out.gospelo.json` は `out.gospelo.html` を書きます。
 
 終了コード: `0` 成功 (自動送りを含む)、`1` 入力または依存関係のエラー、`2` 検証が収束しない。
 
@@ -179,7 +178,7 @@ zip -r gospelo-md2html.zip gospelo-md2html -x "*__pycache__*" -x "*.DS_Store"
 
 - 高さは計測パスで得ます。全ブロックを非表示の連続領域にテキスト段の幅 (横長用紙では単段幅でも) で描画し、Chromium からブロック、表の行、リスト項目、行の高さを取ります。
 - ページはコンテンツ高さの 98% まで貪欲に詰めます。見出しは直後の数行 (図なら図全体) の分を確保し、ページ末尾に残りません。表は行境界で分割してヘッダーを繰り返し、3 行未満の断片は作りません。コードは 16 行以上のときだけ分割し、段落は実測した行境界で分割して両側のインライン Markdown を再構成します。
-- 横長の用紙はページごとに図の枠を持ち、最初の `image` / `mermaid` ブロックがそこに入ってテキストが隣を流れます。図の無いページは全幅を使います。
+- 横長の用紙は N 順の 2 段 (左段を上から下へ、次に右段) で、列数 4 以上の表、コード、横長の図は幅いっぱいの帯になります。左段に入らない図は、空いている右段の先頭に浮動します。
 - 検証パスが最終 HTML を開いて各ページを測り直し、はみ出しがあれば送ります。`build` は編集者が決めたページ境界を保ち、内容を前に詰め直すことはせず、続きページへ送るだけです。
 
 これらの規則の根拠となる設計文書 (用紙、レイアウトロジック、コンテンツモデル、判断事項) はメンテナの作業ディレクトリにあり、要約をスキルの `references/` に置いています。
@@ -194,20 +193,21 @@ md2html/
 │   │       ├── SKILL.md                 # Agent Skill の定義と手順
 │   │       ├── scripts/
 │   │       │   ├── md2html.py           # CLI (PEP 723 メタデータ。uv で実行)
-│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render など
+│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content など
+│   │       │   ├── extract_markdown.py  # 移行用: ツールが書いたどのファイルからも Markdown を取り出す
 │   │       │   └── install.py           # 探索パスへのインストーラ
 │   │       └── references/
 │   │           ├── base.css             # ページ枠と組版 (CSS 変数)
 │   │           ├── figures.js           # ブラウザ側の Mermaid 描画と図のサイズ決定
-│   │           ├── content.schema.json  # コンテンツ JSON スキーマ
-│   │           ├── layout.schema.json   # レイアウト JSON スキーマ
+│   │           ├── gospelo-document.schema.json  # エンベロープのスキーマ (ファイル形式)
+│   │           ├── layout.schema.json   # レイアウト JSON スキーマ (--layout に渡すファイル)
 │   │           ├── page_formats.md      # 用紙、余白、既定値
 │   │           ├── layout_rules.md      # ページ区切りの規則
-│   │           ├── editing_guide.md     # エージェントが JSON を編集する手順
-│   │           └── vendor/              # Mermaid.js、Font Awesome Free (THIRD_PARTY_NOTICES.md 参照)
+│   │           ├── editing_guide.md     # エージェントがエンベロープを編集する手順
+│   │           └── vendor/              # Mermaid.js (版別)、Font Awesome Free (THIRD_PARTY_NOTICES.md 参照)
 │   └── opencode/README.md
-├── tests/                               # pytest (ページ割り規則、スキーマ、インライン分割、取り込み、HTML 埋め込み)
-└── docs/QUICKSTART.md, QUICKSTART_ja.md
+├── tests/                               # pytest (ページ割り規則、スキーマ、インライン分割、取り込み、エンベロープ入出力、移行)
+└── docs/                                # QUICKSTART、DESIGN、ARCHITECTURE、MIGRATION (英日)、spec/gospelo-document
 ```
 
 テストは `uv run --with pytest --with markdown-it-py --with mdit-py-plugins pytest -q tests` で実行します。

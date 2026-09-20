@@ -88,17 +88,17 @@ OpenCode は `.opencode/skills/`、`.claude/skills/`、`.agents/skills/` (プロ
 S=.claude/skills/gospelo-md2html/scripts/md2html.py
 
 # ページ割りの確認だけ (何も書かない)
-uv run $S import docs/architecture.md -o out/architecture.json --page a4 --dry-run
+uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4 --dry-run
 
-# コンテンツ JSON を書き、HTML と PDF を生成
-uv run $S import docs/architecture.md -o out/architecture.json --page a4
-uv run $S build  out/architecture.json -o out/architecture.html --page a4 --pdf out/architecture.pdf
+# Gospelo Document を書き、そこから PDF を生成
+uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
+uv run $S build  out/architecture.gospelo.html --pdf out/architecture.pdf
 ```
 
 スライドにするには `--page 16x9` (または `4x3`) を指定します。本文の既定が 14pt になり、`h2` ごとに 1 枚のスライドになります。
 
-結果を直すには `out/architecture.json` (1 ページ 1 オブジェクト。スキルの `references/editing_guide.md` を参照) を編集し、`check` で残り容量と送りの予定を見てから再度 `build` します。収まらなくなった行や項目は続きページへ自動で移ります。
+結果を直すには `out/architecture.gospelo.html` 先頭のエンベロープ (1 ページ 1 JSON オブジェクト。スキルの `references/editing_guide.md` を参照) を編集し、`check` で残り容量と送りの予定を見てから再度 `build` します。収まらなくなった行や項目は続きページへ自動で移ります。
 
-生成された HTML はこの JSON とレイアウト設定を埋め込んでいるので、`uv run $S build out/architecture.html` で HTML だけから再生成できます。HTML を渡すだけで相手が編集と再生成をできます。
+ファイル自身が内容、レイアウト、原文 Markdown を持っているので、`build` はそのファイルだけから再生成します。`.gospelo.html` を渡すだけで相手が編集と再生成をできます。
 
 エージェントのワークフローでは手で実行することはほとんどありません。エージェントが [SKILL.md](../skills/claude/gospelo-md2html/SKILL.md) を読んで手順どおりに進めます。オプション、JSON の形式、ページ割りの仕組みは [README_ja](../README_ja.md) を参照してください。

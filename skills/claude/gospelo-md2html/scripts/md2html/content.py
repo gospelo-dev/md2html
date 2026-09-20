@@ -1,8 +1,16 @@
-"""Content JSON: load, validate, save, page 0 backup, restore
-(docs/07_content_model.md sections 3, 3.5 and 8).
+"""Gospelo Document I/O and content validation (docs/spec/gospelo-document.md).
+
+A document is one envelope object: format, version, generator, meta, layout,
+pages. It is stored either inside a .gospelo.html file (script
+id="gospelo-document", first thing in <head>) or as a .gospelo.json sidecar.
+Internally the tool works on the content part (version, meta, pages) and a
+layout dict; the envelope exists only at the file boundary.
 
 Validation is a self-contained minimal check (required keys, types, enums
 and the page-0 rules). It never fills in defaults for missing data.
+
+There is no reader for the pre-1 format (md2html-content / page-0 blocks or a
+bare content JSON): such files raise a ContentError pointing at MIGRATION_URL.
 """
 
 from __future__ import annotations
@@ -13,7 +21,18 @@ import re
 from pathlib import Path
 from typing import Any
 
+from . import __version__
+
+FORMAT = "gospelo-document"
 SCHEMA_VERSION = 1
+GENERATOR = f"gospelo-md2html {__version__}"
+DOC_SCRIPT_ID = "gospelo-document"
+SIGNATURE = f"<!-- {FORMAT} {SCHEMA_VERSION} -->"
+HTML_SUFFIX = ".gospelo.html"
+JSON_SUFFIX = ".gospelo.json"
+MIGRATION_URL = "https://github.com/gospelo-dev/md2html/blob/main/docs/MIGRATION.md"
+
+HEAD_CHUNK = 64 * 1024  # the envelope must start within the first chunk
 
 PAGE_KINDS = ("source", "cover", "content")
 
@@ -40,46 +59,109 @@ class ContentError(ValueError):
 
 
 # --------------------------------------------------------------------------
-# load / save
+# paths
 # --------------------------------------------------------------------------
 
 def is_html_path(path: Path) -> bool:
     return path.suffix.lower() in (".html", ".htm")
 
 
-def load_content(path: Path) -> dict[str, Any]:
-    """Load a content JSON, or the content JSON embedded in a generated HTML."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise ContentError(f"content file not found: {path}") from None
+def default_html_path(path: Path) -> Path:
+    """<name>.gospelo.html next to `path` (input Markdown or sidecar JSON)."""
+    name = path.name
+    for suffix in (JSON_SUFFIX, HTML_SUFFIX):
+        if name.lower().endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    else:
+        name = path.stem
+    return path.with_name(name + HTML_SUFFIX)
+
+
+# --------------------------------------------------------------------------
+# envelope <-> (content, layout)
+# --------------------------------------------------------------------------
+
+def make_envelope(doc: dict[str, Any], layout: dict[str, Any], pages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The Gospelo Document object for `doc` (content part) and an effective layout dict."""
+    src_page = doc["pages"][0] if doc["pages"] and doc["pages"][0]["kind"] == "source" else None
+    body = list(pages) if pages is not None else [p for p in doc["pages"] if p["kind"] != "source"]
+    env: dict[str, Any] = {
+        "format": FORMAT,
+        "version": SCHEMA_VERSION,
+        "generator": GENERATOR,
+        "meta": dict(doc["meta"]),
+        "layout": dict(layout),
+        "pages": ([src_page] if src_page is not None else []) + body,
+    }
+    if doc.get("extras"):
+        env["extras"] = doc["extras"]
+    return strip_runtime_ids(env)
+
+
+def split_envelope(env: Any, where: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate the envelope shell and return (content doc, layout dict)."""
+    if not isinstance(env, dict) or env.get("format") != FORMAT:
+        raise ContentError(
+            f"{where}: not a Gospelo Document (no \"format\": \"{FORMAT}\"). "
+            f"Files written by earlier md2html releases must be converted first: {MIGRATION_URL}"
+        )
+    if env.get("version") != SCHEMA_VERSION:
+        raise ContentError(f"{where}: unsupported {FORMAT} version {env.get('version')!r} (this tool reads {SCHEMA_VERSION})")
+    for key in env:
+        if key not in ("format", "version", "generator", "meta", "layout", "pages", "extras"):
+            raise ContentError(f"{where}: unknown top-level key {key!r}")
+    if "generator" in env and not isinstance(env["generator"], str):
+        raise ContentError(f"{where}: generator must be a string")
+    layout = env.get("layout")
+    if not isinstance(layout, dict):
+        raise ContentError(f"{where}: layout must be an object")
+    doc: dict[str, Any] = {"version": SCHEMA_VERSION, "meta": env.get("meta"), "pages": env.get("pages")}
+    if "extras" in env:
+        doc["extras"] = env["extras"]
+    validate_content(doc, where)
+    return doc, layout
+
+
+# --------------------------------------------------------------------------
+# load / save
+# --------------------------------------------------------------------------
+
+def load_document(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(content doc with block ids assigned, layout dict) from a .gospelo.html or .gospelo.json."""
     if is_html_path(path):
-        doc, _ = extract_from_html(text)
+        env = _envelope_from_html(read_head(path), str(path))
     else:
         try:
-            doc = json.loads(text)
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            raise ContentError(f"document not found: {path}") from None
+        try:
+            env = json.loads(text)
         except json.JSONDecodeError as e:
-            raise ContentError(f"content file is not valid JSON: {path}: {e}") from None
-    validate_content(doc, str(path))
+            raise ContentError(f"document is not valid JSON: {path}: {e}") from None
+    doc, layout = split_envelope(env, str(path))
     assign_block_ids(doc)
-    return doc
+    return doc, layout
 
 
-def load_embedded_layout(path: Path) -> dict[str, Any] | None:
-    """The layout snapshot embedded in a generated HTML (None for JSON inputs)."""
-    if not is_html_path(path):
-        return None
-    _, layout = extract_from_html(path.read_text(encoding="utf-8"))
-    return layout
+def load_content(path: Path) -> dict[str, Any]:
+    return load_document(path)[0]
 
 
-def save_content(doc: dict[str, Any], path: Path) -> None:
-    out = strip_runtime_ids(doc)
-    path.write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+def load_embedded_layout(path: Path) -> dict[str, Any]:
+    return load_document(path)[1]
+
+
+def save_document(doc: dict[str, Any], layout: dict[str, Any], path: Path) -> None:
+    """Write the sidecar form (.gospelo.json)."""
+    env = make_envelope(doc, layout)
+    path.write_text(json.dumps(env, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def strip_runtime_ids(doc: dict[str, Any]) -> dict[str, Any]:
-    """Block ids are computed at load time; do not persist the generated ones."""
+    """Block ids are computed at load time; do not persist the generated ones.
+    Runtime keys (leading underscore) on pages are dropped as well."""
     copy = json.loads(json.dumps(doc, ensure_ascii=False))
     for page in copy["pages"]:
         for key in [k for k in page if k.startswith("_")]:
@@ -100,6 +182,76 @@ def assign_block_ids(doc: dict[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------------
+# HTML container: embed and extract
+# --------------------------------------------------------------------------
+
+def embed_json(obj: Any) -> str:
+    """JSON safe to place inside <script type="application/json">: '<', '>' and
+    '&' are escaped so no '</script' or comment sequence can appear, and
+    Unicode is kept readable."""
+    return (json.dumps(obj, ensure_ascii=False, indent=2)
+            .replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e"))
+
+
+def envelope_script(env: dict[str, Any]) -> str:
+    return f'<script type="application/json" id="{DOC_SCRIPT_ID}">\n' + embed_json(env) + "\n</script>"
+
+
+_OPEN_TAG = f'<script type="application/json" id="{DOC_SCRIPT_ID}">'
+_CLOSE_TAG = "</script>"
+
+
+def read_head(path: Path) -> str:
+    """Read `path` only as far as the end of the envelope block. The envelope
+    is the first script in <head>, so a few chunks are enough; the Mermaid
+    library and the rendered pages after it are never read."""
+    try:
+        f = path.open("r", encoding="utf-8")
+    except FileNotFoundError:
+        raise ContentError(f"document not found: {path}") from None
+    with f:
+        buf = f.read(HEAD_CHUNK)
+        start = buf.find(_OPEN_TAG)
+        if start < 0:
+            _raise_not_gospelo(buf, str(path))
+        while True:
+            end = buf.find(_CLOSE_TAG, start + len(_OPEN_TAG))
+            if end >= 0:
+                return buf[: end + len(_CLOSE_TAG)]
+            chunk = f.read(HEAD_CHUNK)
+            if not chunk:
+                raise ContentError(f"{path}: the {DOC_SCRIPT_ID} block is not terminated")
+            buf += chunk
+
+
+def _raise_not_gospelo(head: str, where: str) -> None:
+    # pre-1 md2html output: the envelope blocks sat after the Mermaid library, but the
+    # <html> tag (always inside the first chunk) carried this attribute from the start
+    legacy = "data-mermaid-font-size=" in head or 'id="md2html-content"' in head or 'id="page-0"' in head
+    hint = ("it was written by an earlier md2html release; convert it first: " if legacy
+            else "it was not generated by md2html build, or the block was removed. Conversion notes: ")
+    raise ContentError(f"{where}: no <script id=\"{DOC_SCRIPT_ID}\"> envelope found; {hint}{MIGRATION_URL}")
+
+
+def extract_from_html(html_text: str, where: str = "html") -> tuple[dict[str, Any], dict[str, Any]]:
+    """(content doc, layout dict) from the text of a .gospelo.html (or its head)."""
+    return split_envelope(_envelope_from_html(html_text, where), where)
+
+
+def _envelope_from_html(text: str, where: str) -> dict[str, Any]:
+    start = text.find(_OPEN_TAG)
+    if start < 0:
+        _raise_not_gospelo(text, where)
+    end = text.find(_CLOSE_TAG, start + len(_OPEN_TAG))
+    if end < 0:
+        raise ContentError(f"{where}: the {DOC_SCRIPT_ID} block is not terminated")
+    try:
+        return json.loads(text[start + len(_OPEN_TAG):end])
+    except json.JSONDecodeError as e:
+        raise ContentError(f"{where}: embedded {DOC_SCRIPT_ID} JSON is not valid: {e}") from None
+
+
+# --------------------------------------------------------------------------
 # validation
 # --------------------------------------------------------------------------
 
@@ -117,6 +269,15 @@ def validate_content(doc: Any, where: str = "content") -> None:
         raise ContentError(f"{where}: meta.date must be a string or null")
     if not isinstance(meta.get("source"), (str, type(None))):
         raise ContentError(f"{where}: meta.source must be a string or null")
+    if "lang" in meta and (not isinstance(meta["lang"], str) or not meta["lang"]):
+        raise ContentError(f"{where}: meta.lang must be a non-empty string")
+    for key in meta:
+        if key not in ("title", "date", "source", "lang", "extras"):
+            raise ContentError(f"{where}: meta has unknown key {key!r}")
+    if "extras" in meta and not isinstance(meta["extras"], dict):
+        raise ContentError(f"{where}: meta.extras must be an object")
+    if "extras" in doc and not isinstance(doc["extras"], dict):
+        raise ContentError(f"{where}: extras must be an object")
     pages = doc.get("pages")
     if not isinstance(pages, list) or not pages:
         raise ContentError(f"{where}: pages must be a non-empty array")
@@ -138,6 +299,9 @@ def _validate_page(page: Any, idx: int, where: str) -> None:
     for key in ("id", "kind", "title", "continued", "blocks"):
         if key not in page:
             raise ContentError(f"{loc} is missing {key!r}")
+    for key in page:
+        if key not in ("id", "kind", "title", "continued", "blocks", "extras") and not key.startswith("_"):
+            raise ContentError(f"{loc} has unknown key {key!r}")
     if not isinstance(page["id"], str) or not page["id"]:
         raise ContentError(f"{loc}.id must be a non-empty string")
     if page["kind"] not in PAGE_KINDS:
@@ -148,6 +312,8 @@ def _validate_page(page: Any, idx: int, where: str) -> None:
         raise ContentError(f"{loc}.continued must be a boolean")
     if not isinstance(page["blocks"], list):
         raise ContentError(f"{loc}.blocks must be an array")
+    if "extras" in page and not isinstance(page["extras"], dict):
+        raise ContentError(f"{loc}.extras must be an object")
     if page["kind"] == "source":
         if idx != 0:
             raise ContentError(f"{loc}: a source page must be pages[0]")
@@ -237,82 +403,12 @@ def content_pages(doc: dict[str, Any]) -> list[dict[str, Any]]:
     return [p for p in doc["pages"] if p["kind"] != "source"]
 
 
-def escape_for_script(text: str) -> str:
-    return text.replace("</script", "<\\/script")
-
-
-def unescape_from_script(text: str) -> str:
-    return text.replace("<\\/script", "</script")
-
-
-_PAGE0_RE = re.compile(
-    r'<script type="text/markdown" id="page-0"[^>]*>\n?(.*?)</script>', re.DOTALL
-)
-
-
-def restore_from_html(html_text: str) -> str:
-    m = _PAGE0_RE.search(html_text)
-    if not m:
-        raise ContentError("no page-0 source block found in the HTML")
-    text = m.group(1)
-    if text.endswith("\n"):
-        text = text[:-1]  # the newline the renderer adds before </script>
-    return unescape_from_script(text)
-
-
-# --------------------------------------------------------------------------
-# content JSON embedded in generated HTML (the HTML is a self-contained document)
-# --------------------------------------------------------------------------
-
-CONTENT_SCRIPT_ID = "md2html-content"
-LAYOUT_SCRIPT_ID = "md2html-layout"
-
-
-def embed_json(obj: Any) -> str:
-    """JSON safe to place inside <script type="application/json">: '<' is escaped
-    so no '</script' sequence can appear, and Unicode is kept readable."""
-    return json.dumps(obj, ensure_ascii=False, indent=2).replace("<", "\\u003c")
-
-
-_CONTENT_RE = re.compile(
-    r'<script type="application/json" id="' + CONTENT_SCRIPT_ID + r'">\s*(.*?)\s*</script>', re.DOTALL
-)
-_LAYOUT_RE = re.compile(
-    r'<script type="application/json" id="' + LAYOUT_SCRIPT_ID + r'">\s*(.*?)\s*</script>', re.DOTALL
-)
-
-
-def extract_from_html(html_text: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Return (content doc, layout dict or None) embedded in a generated HTML."""
-    m = _CONTENT_RE.search(html_text)
-    if not m:
-        raise ContentError(
-            "this HTML has no embedded content JSON (id=md2html-content); "
-            "it was not generated by md2html build, or the block was removed"
-        )
-    try:
-        doc = json.loads(m.group(1))
-    except json.JSONDecodeError as e:
-        raise ContentError(f"embedded content JSON is not valid: {e}") from None
-    layout = None
-    lm = _LAYOUT_RE.search(html_text)
-    if lm:
-        try:
-            layout = json.loads(lm.group(1))
-        except json.JSONDecodeError as e:
-            raise ContentError(f"embedded layout JSON is not valid: {e}") from None
-    return doc, layout
-
-
 def restore_markdown(path: Path) -> str:
-    text = path.read_text(encoding="utf-8")
-    if path.suffix.lower() in (".html", ".htm"):
-        return restore_from_html(text)
-    doc = json.loads(text)
-    validate_content(doc, str(path))
+    """The original Markdown (pages[0]) of a .gospelo.html or .gospelo.json."""
+    doc, _ = load_document(path)
     src = get_source_markdown(doc)
     if src is None:
-        raise ContentError(f"{path}: this content JSON has no page 0 source backup")
+        raise ContentError(f"{path}: this document has no page 0 source backup")
     return src
 
 

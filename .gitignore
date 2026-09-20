@@ -11,6 +11,19 @@ development/
 scratch/
 *.log
 .DS_Store
+Thumbs.db
+
+# Local secrets and environment
+.env
+.env.*
+.envrc
+
+# Local build outputs (the README examples write to out/) and ZIP distributions
+out/
+*.zip
+# copies of the vendored library that --mermaid-lib link places next to outputs
+mermaid.min.js
+!skills/claude/gospelo-md2html/references/vendor/mermaid.min.js
 
 # Python
 __pycache__/
@@ -20,7 +33,11 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .coverage
+coverage.xml
 htmlcov/
+dist/
+build/
+*.egg-info/
 
 # md2html temporary measurement files (only left behind with MD2HTML_KEEP_TEMP=1)
 .md2html-*.html

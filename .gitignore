@@ -1,0 +1,26 @@
+# Agent discovery paths (dev symlinks created by install.py --symlink)
+.agents/
+.claude/
+.opencode/
+.vscode/
+
+# Internal working documents (design notes, changelog)
+development/
+
+# Temporary files
+scratch/
+*.log
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# md2html temporary measurement files (only left behind with MD2HTML_KEEP_TEMP=1)
+.md2html-*.html

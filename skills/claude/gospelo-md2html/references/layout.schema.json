@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "gospelo-md2html layout JSON",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "page": { "enum": ["a4", "a4-landscape", "a3", "a3-landscape", "16x9", "4x3"] },
+    "fontSize": { "type": "string", "pattern": "^[0-9.]+(pt|px|mm)$" },
+    "titleScale": { "type": "number", "exclusiveMinimum": 0 },
+    "headerTitle": { "type": "string", "description": "section | doc | fixed:<text>" },
+    "columns": { "enum": ["split", "single"] },
+    "figureSide": { "enum": ["left", "right"] },
+    "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+    "details": { "enum": ["drop", "expand"] },
+    "mermaidLib": { "enum": ["embed", "link"] },
+    "hrBreak": { "type": "boolean" },
+    "imageScale": { "type": "number", "exclusiveMinimum": 0 },
+    "embedImages": { "type": "boolean" },
+    "date": { "type": ["string", "null"], "description": "YYYY-MM-DD or none" },
+    "css": { "type": ["string", "null"] },
+    "overrides": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "columns": { "enum": ["split", "single"] },
+          "figureSide": { "enum": ["left", "right"] },
+          "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+          "maxHeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

@@ -22,8 +22,12 @@ Thumbs.db
 out/
 *.zip
 # copies of the vendored library that --mermaid-lib link places next to outputs
+# (mermaid-<version>.min.js + LICENSE.mermaid-<version>.txt); the vendored
+# per-version copies under references/vendor/mermaid/<version>/ stay tracked
 mermaid.min.js
-!skills/claude/gospelo-md2html/references/vendor/mermaid.min.js
+mermaid-*.min.js
+LICENSE.mermaid-*.txt
+!skills/claude/gospelo-md2html/references/vendor/mermaid/*/mermaid.min.js
 
 # Python
 __pycache__/

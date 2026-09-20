@@ -223,7 +223,8 @@ md2html/
 │   │       ├── SKILL.md                 # Agent Skill definition and workflow
 │   │       ├── scripts/
 │   │       │   ├── md2html.py           # CLI (PEP 723 metadata; run with uv)
-│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, ...
+│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, layout,
+│   │       │   │                        # fonts (embedded subsets), pptx_export, assets, scale, formats, report
 │   │       │   ├── extract_markdown.py  # Migration: pull the Markdown out of any file the tool wrote
 │   │       │   └── install.py           # Installer for agent discovery paths
 │   │       └── references/
@@ -234,13 +235,18 @@ md2html/
 │   │           ├── page_formats.md      # Paper sizes, margins, defaults
 │   │           ├── layout_rules.md      # Pagination rules
 │   │           ├── editing_guide.md     # How an agent edits the envelope
-│   │           └── vendor/              # Mermaid.js (per version), Font Awesome Free (see THIRD_PARTY_NOTICES.md)
-│   └── opencode/README.md
-├── tests/                               # pytest (pagination rules, schema, inline split, import, envelope I/O, migration)
-└── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
+│   │           ├── color-scheme.md      # Mermaid palette used in the docs' diagrams
+│   │           └── vendor/              # Mermaid.js (per version), Font Awesome Free, BIZ UD fonts (see THIRD_PARTY_NOTICES.md)
+│   └── opencode/README.md               # How OpenCode picks up the same skill
+├── tests/                               # pytest: pagination and two columns, inline split, envelope I/O, migration,
+│                                        # Mermaid vendoring and prerender, PPTX export, fonts
+├── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
+├── assets/                              # README hero image; design/ holds the DESIGN figures and the script that draws them
+├── THIRD_PARTY_NOTICES.md               # Licenses of the vendored assets and runtime dependencies
+└── LICENSE
 ```
 
-Run the tests with `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx pytest -q tests`.
+Run the tests with `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx --with fonttools --with brotli pytest -q tests`.
 
 ## License
 

@@ -222,7 +222,8 @@ md2html/
 │   │       ├── SKILL.md                 # Agent Skill の定義と手順
 │   │       ├── scripts/
 │   │       │   ├── md2html.py           # CLI (PEP 723 メタデータ。uv で実行)
-│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content など
+│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, layout,
+│   │       │   │                        # fonts (サブセット埋め込み), pptx_export, assets, scale, formats, report
 │   │       │   ├── extract_markdown.py  # 移行用: ツールが書いたどのファイルからも Markdown を取り出す
 │   │       │   └── install.py           # 探索パスへのインストーラ
 │   │       └── references/
@@ -233,13 +234,18 @@ md2html/
 │   │           ├── page_formats.md      # 用紙、余白、既定値
 │   │           ├── layout_rules.md      # ページ区切りの規則
 │   │           ├── editing_guide.md     # エージェントがエンベロープを編集する手順
-│   │           └── vendor/              # Mermaid.js (版別)、Font Awesome Free (THIRD_PARTY_NOTICES.md 参照)
-│   └── opencode/README.md
-├── tests/                               # pytest (ページ割り規則、スキーマ、インライン分割、取り込み、エンベロープ入出力、移行)
-└── docs/                                # QUICKSTART、DESIGN、ARCHITECTURE、MIGRATION (英日)、spec/gospelo-document
+│   │           ├── color-scheme.md      # ドキュメントの図で使う Mermaid の配色
+│   │           └── vendor/              # Mermaid.js (版別)、Font Awesome Free、BIZ UD フォント (THIRD_PARTY_NOTICES.md 参照)
+│   └── opencode/README.md               # OpenCode から同じスキルを使う方法
+├── tests/                               # pytest: ページ割りと 2 段組、インライン分割、エンベロープ入出力、移行、
+│                                        # Mermaid 同梱と prerender、PPTX 出力、フォント
+├── docs/                                # QUICKSTART、DESIGN、ARCHITECTURE、MIGRATION (英日)、spec/gospelo-document
+├── assets/                              # README のヒーロー画像。design/ に DESIGN の図とそれを描くスクリプト
+├── THIRD_PARTY_NOTICES.md               # 同梱資産と実行時依存のライセンス
+└── LICENSE
 ```
 
-テストは `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx pytest -q tests` で実行します。
+テストは `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx --with fonttools --with brotli pytest -q tests` で実行します。
 
 ## ライセンス
 

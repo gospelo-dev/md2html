@@ -47,3 +47,13 @@ page  = { "id": "p05", "kind": "cover|content|source", "title": "h2 の文字列
 
 分割された表は 2 ブロックになり、後片が `continued: true` を持つ。行を足すときは意味的に
 正しい方の表に足す。全体を組み直したいときは `build --reflow` (利用者に確認してから)。
+
+## HTML しか手元に無い場合
+
+生成 HTML はコンテンツ JSON とレイアウト設定を埋め込んでいる。
+
+- `<script type="application/json" id="md2html-content">` の中身がコンテンツ JSON。編集するのはここだけ。描画済みの `<section class="page">` 以下は触らない (再生成で上書きされる)。
+- `<script type="application/json" id="md2html-layout">` が有効なレイアウト設定。用紙や文字サイズを変えるときはここか CLI オプションで指定する (CLI が優先)。
+- JSON 内では `<` が `\u003c` にエスケープされている。書き戻すときも同じエスケープにする (素の `</script` を入れると要素が壊れる)。
+- 編集後は `check out.html` で送りの予定を確認し、`build out.html` で同じファイルを再生成する。自動送りの結果は再生成された HTML の JSON に反映される。
+- 原文 Markdown は `<script type="text/markdown" id="page-0">` にあり、`restore out.html -o original.md` で取り出せる。

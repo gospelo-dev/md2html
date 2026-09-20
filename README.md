@@ -2,15 +2,17 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-1E90FF.svg?style=flat)](https://github.com/gospelo-dev/md2html/blob/main/LICENSE) [![Python](https://img.shields.io/badge/Python-3.10+-1E90FF.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/) [![uv](https://img.shields.io/badge/run_with-uv-DE5FE9.svg?style=flat)](https://docs.astral.sh/uv/) [![Playwright](https://img.shields.io/badge/Playwright-Chromium-2EAD33.svg?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/python/) [![Mermaid](https://img.shields.io/badge/Mermaid-11-FF3670.svg?style=flat&logo=mermaid&logoColor=white)](https://mermaid.js.org/) [![Agent Skill](https://img.shields.io/badge/Agent_Skill-Claude_Code,_Copilot,_Codex,_OpenCode-7B3FF2.svg?style=flat)](https://docs.claude.com/en/docs/claude-code/skills)
 
-Turn Markdown + Mermaid into **paginated, print-ready HTML and PDF** with a chosen paper size and font size, and keep the result **editable page by page as JSON** so an AI agent can revise a table or a list without touching HTML.
+<p align="center"><img src="https://raw.githubusercontent.com/gospelo-dev/md2html/main/assets/hero.jpg" alt="gospelo-md2html: Markdown + Mermaid to paginated slides and documents, editable JSON, original kept" width="820"></p>
+
+Turn Markdown + Mermaid into **layout-aware, paginated HTML slide decks and documents** that an **AI agent can edit and rebuild as they are**, and that **keep the original Markdown inside**. This is not a plain Markdown-to-HTML converter.
 
 日本語版: [README_ja.md](https://github.com/gospelo-dev/md2html/blob/main/README_ja.md)
 
-Most Markdown-to-PDF tools flow text into a browser's print engine and hope for the best: headings land at the bottom of a page, tables split anywhere, diagrams shrink or overflow, and once the HTML exists nobody can adjust a single page without regenerating everything. This skill takes a different route:
+Most Markdown-to-PDF tools flow text into a browser's print engine and hope for the best: headings land at the bottom of a page, tables split anywhere, diagrams shrink or overflow, and once the HTML exists nobody can adjust a single page without regenerating everything. This skill is built around three things:
 
-1. **`import`** reads the Markdown, renders every block in headless Chromium to get real heights, paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, one figure per page in split layouts), and writes a **content JSON**: one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source.
-2. You (or your agent) **edit the JSON**. Add a table row, fix a paragraph, change a diagram's source.
-3. **`build`** renders the JSON back to HTML (and PDF). Anything that no longer fits is spilled to a continuation page that carries the same title, and the JSON is written back so it always matches the output.
+1. **Layout-aware pagination.** `import` renders every block in headless Chromium to get real heights and paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, one figure beside the text on landscape paper) into 16:9 / 4:3 slides or A4 / A3 documents.
+2. **Editable by an AI.** Content lives in a **content JSON** (one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source) that is also embedded in the generated HTML. An agent edits the page in question and runs `build`; it can do the same when all it has is the HTML file. Anything that no longer fits is spilled to a continuation page with the same title, and the JSON always matches the output.
+3. **The original is preserved.** The Markdown as imported is kept verbatim inside the JSON and the HTML; `restore` gets it back at any time, and a fresh `import` from it undoes every edit.
 
 Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid is rendered in the browser by an embedded Mermaid.js, so diagrams stay editable all the way to the final file.
 
@@ -27,7 +29,8 @@ New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/
 | Real measurement | Heights are measured in Chromium (Playwright), never estimated; a verify pass checks every page for overflow |
 | Editable content | Page-scoped JSON; table rows, list items and Mermaid source are plain data |
 | Auto spill | Content that stops fitting after an edit moves to a `(continued)` page; nothing is deleted or forced |
-| Rollback | The original Markdown is kept as page 0 inside the JSON and inside the HTML; `restore` gets it back |
+| Self-contained HTML | The HTML embeds its own content JSON and layout; `check out.html` / `build out.html` verify and regenerate it from that alone, so one file is all an editor (or an agent) needs |
+| Original preserved | The Markdown as imported is kept verbatim as page 0 inside the JSON and inside the HTML; `restore` gets it back |
 | Report | Per-page used / remaining height, row and item heights, figure scale, warnings, and planned spills |
 
 ## Prerequisites
@@ -62,6 +65,11 @@ uv run $S build out/handover.json -o out/handover.html --page 16x9 --font-size 1
 
 # Roll back to the original Markdown at any time (from the JSON or the HTML)
 uv run $S restore out/handover.html -o out/handover.original.md
+
+# Got only the HTML? It carries its content JSON and layout: edit the
+# <script type="application/json" id="md2html-content"> block, then rebuild in place
+uv run $S check out/handover.html
+uv run $S build out/handover.html --pdf out/handover.pdf
 ```
 
 Paper and font size are pagination inputs, so pass them to `import` as well. To change them later, run `build --reflow` to re-paginate everything.
@@ -128,8 +136,10 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--embed-images` | off | Inline images as data URIs |
 | `--date` | today | Footer date, or `none` |
 | `--report PATH` | | Write the capacity report as JSON |
-| `--reflow` | | `build`: re-paginate from scratch and rewrite the JSON |
-| `--no-write-back` | | `build`: do not write spills back to the JSON |
+| `--reflow` | | `build`: re-paginate from scratch. With a JSON input it rewrites the JSON and exits; with an HTML input it rebuilds the HTML |
+| `--no-write-back` | | `build`: do not write spills back to the JSON (JSON input only) |
+
+`check` and `build` accept either a content JSON or an HTML produced by `build`. With an HTML input the embedded layout becomes the default and `--layout` / CLI options override it; `build out.html` writes back to the same file by default.
 
 Exit codes: `0` success (spills included), `1` input or dependency error, `2` verification did not converge.
 
@@ -195,7 +205,7 @@ md2html/
 │   │           ├── editing_guide.md     # How an agent edits the content JSON
 │   │           └── vendor/              # Mermaid.js, Font Awesome Free (see THIRD_PARTY_NOTICES.md)
 │   └── opencode/README.md
-├── tests/                               # pytest (pagination rules, schema, inline split, import)
+├── tests/                               # pytest (pagination rules, schema, inline split, import, HTML embedding)
 └── docs/QUICKSTART.md, QUICKSTART_ja.md
 ```
 

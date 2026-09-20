@@ -99,4 +99,6 @@ For slides use `--page 16x9` (or `4x3`); the default body size becomes 14pt and 
 
 To edit the result, change `out/architecture.json` (one object per page; see the skill's `references/editing_guide.md`), run `check` to see the remaining capacity and planned spills, then `build` again. Rows and items that stop fitting move to a continuation page automatically.
 
+The generated HTML also embeds that JSON and the layout options, so `uv run $S build out/architecture.html` regenerates it from the HTML alone. Handing someone the HTML is enough for them to edit and rebuild it.
+
 In agent workflows you rarely run these by hand: the agent reads [SKILL.md](../skills/claude/gospelo-md2html/SKILL.md) and follows its steps. See the [README](../README.md) for options, the JSON format, and how pagination works.

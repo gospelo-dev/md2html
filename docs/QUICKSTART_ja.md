@@ -99,4 +99,6 @@ uv run $S build  out/architecture.json -o out/architecture.html --page a4 --pdf 
 
 結果を直すには `out/architecture.json` (1 ページ 1 オブジェクト。スキルの `references/editing_guide.md` を参照) を編集し、`check` で残り容量と送りの予定を見てから再度 `build` します。収まらなくなった行や項目は続きページへ自動で移ります。
 
+生成された HTML はこの JSON とレイアウト設定を埋め込んでいるので、`uv run $S build out/architecture.html` で HTML だけから再生成できます。HTML を渡すだけで相手が編集と再生成をできます。
+
 エージェントのワークフローでは手で実行することはほとんどありません。エージェントが [SKILL.md](../skills/claude/gospelo-md2html/SKILL.md) を読んで手順どおりに進めます。オプション、JSON の形式、ページ割りの仕組みは [README_ja](../README_ja.md) を参照してください。

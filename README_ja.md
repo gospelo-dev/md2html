@@ -2,15 +2,17 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-1E90FF.svg?style=flat)](https://github.com/gospelo-dev/md2html/blob/main/LICENSE) [![Python](https://img.shields.io/badge/Python-3.10+-1E90FF.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/) [![uv](https://img.shields.io/badge/run_with-uv-DE5FE9.svg?style=flat)](https://docs.astral.sh/uv/) [![Playwright](https://img.shields.io/badge/Playwright-Chromium-2EAD33.svg?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/python/) [![Mermaid](https://img.shields.io/badge/Mermaid-11-FF3670.svg?style=flat&logo=mermaid&logoColor=white)](https://mermaid.js.org/) [![Agent Skill](https://img.shields.io/badge/Agent_Skill-Claude_Code,_Copilot,_Codex,_OpenCode-7B3FF2.svg?style=flat)](https://docs.claude.com/en/docs/claude-code/skills)
 
-Markdown + Mermaid を、用紙サイズと文字サイズを指定して **ページ割り済みの印刷品質 HTML / PDF** にします。結果は **ページ単位で編集できる JSON** として保持されるので、AI エージェントが HTML に触れずに表の行やリストを直せます。
+<p align="center"><img src="https://raw.githubusercontent.com/gospelo-dev/md2html/main/assets/hero.jpg" alt="gospelo-md2html: Markdown + Mermaid からページ分割されたスライドと文書へ。編集可能な JSON、原文を保持" width="820"></p>
+
+Markdown + Mermaid から、**レイアウトを考慮してページ分割された HTML のスライド資料や文書** を作ります。生成した HTML は **AI エージェントがそのまま編集して再生成でき**、**原文の Markdown を内部に保持** しています。単なる Markdown から HTML への変換ではありません。
 
 English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/README.md)
 
-一般的な Markdown から PDF への変換は、ブラウザの印刷エンジンに文章を流し込むだけです。見出しがページ末尾に取り残され、表が任意の位置で切れ、図は縮みすぎるかはみ出し、HTML ができた後は 1 ページだけを直すこともできません。このスキルは別の道を取ります。
+一般的な Markdown から PDF への変換は、ブラウザの印刷エンジンに文章を流し込むだけです。見出しがページ末尾に取り残され、表が任意の位置で切れ、図は縮みすぎるかはみ出し、HTML ができた後は 1 ページだけを直すこともできません。このスキルは次の 3 点を軸にしています。
 
-1. **`import`** が Markdown を読み、全ブロックをヘッドレス Chromium で描画して実寸の高さを取り、組版の規則 (見出しは本文と同じページに、表は行境界で分割してヘッダーを繰り返す、左右分割では 1 ページ 1 図) でページ割りし、**コンテンツ JSON** を書きます。1 ページ 1 オブジェクト、本文はインライン Markdown、表は `header` + `rows`、Mermaid はソース文字列です。
-2. あなた (またはエージェント) が **JSON を編集** します。表に行を足す、段落を直す、図のソースを変える。
-3. **`build`** が JSON から HTML (と PDF) を生成します。収まらなくなった分は同じタイトルの続きページへ自動で送られ、JSON に書き戻されるので、JSON と出力は常に一致します。
+1. **レイアウトを考慮したページ分割。** `import` が全ブロックをヘッドレス Chromium で描画して実寸の高さを取り、組版の規則 (見出しは本文と同じページに、表は行境界で分割してヘッダーを繰り返す、横長の用紙では 1 ページ 1 図をテキストの隣に) で 16:9 / 4:3 のスライドや A4 / A3 の文書に割り付けます。
+2. **AI で編集できる。** 内容は **コンテンツ JSON** (1 ページ 1 オブジェクト、本文はインライン Markdown、表は `header` + `rows`、Mermaid はソース文字列) として持ち、生成 HTML にも埋め込まれます。エージェントは JSON の該当ページを直して `build` するだけで、HTML 1 ファイルを受け取った場合でも同じことができます。収まらなくなった分は同じタイトルの続きページへ自動で送られ、JSON と出力は常に一致します。
+3. **原文を保持する。** 取り込み時点の Markdown を JSON と HTML の中にそのまま保持し、`restore` でいつでも取り出せます。編集をやり直したいときは原文から `import` し直せます。
 
 レイアウトはコンテンツに含めません。用紙、余白、文字階層、段の分割、図の側は CLI オプションか別のレイアウト JSON で与えます。Mermaid は HTML に同梱した Mermaid.js がブラウザで描画するので、最終ファイルまで図が編集可能なままです。
 
@@ -27,7 +29,8 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 | 実測 | 高さは Chromium (Playwright) で実測し、推定しない。検証パスが全ページのはみ出しを確認する |
 | 編集可能なコンテンツ | ページ単位の JSON。表の行、リスト項目、Mermaid ソースは素のデータ |
 | 自動送り | 編集で収まらなくなった分は「(続き)」ページへ移す。内容を削ったり押し込んだりしない |
-| 巻き戻し | 原文 Markdown を JSON と HTML のページ 0 に保持し、`restore` で取り出せる |
+| 自己完結した HTML | HTML 自身がコンテンツ JSON とレイアウト設定を埋め込んでおり、`check out.html` / `build out.html` でその HTML だけから確認と再生成ができる。編集者 (やエージェント) に渡すのは 1 ファイルで済む |
+| 原文の保持 | 取り込み時点の Markdown を JSON と HTML のページ 0 にそのまま保持し、`restore` で取り出せる |
 | レポート | ページごとの使用量と残り、表の行やリスト項目の高さ、図の縮小率、警告、送りの予定 |
 
 ## 前提
@@ -62,6 +65,11 @@ uv run $S build out/handover.json -o out/handover.html --page 16x9 --font-size 1
 
 # いつでも原文 Markdown に戻せる (JSON からでも HTML からでも)
 uv run $S restore out/handover.html -o out/handover.original.md
+
+# HTML しか手元に無い場合: HTML 内の <script type="application/json" id="md2html-content">
+# の JSON を編集し、その HTML を入力にして同じ場所に再生成する
+uv run $S check out/handover.html
+uv run $S build out/handover.html --pdf out/handover.pdf
 ```
 
 用紙と文字サイズはページ割りの入力なので `import` にも渡します。後から変える場合は `build --reflow` でページ割り全体をやり直します。
@@ -128,8 +136,10 @@ uv run $S restore out/handover.html -o out/handover.original.md
 | `--embed-images` | off | 画像を data URI で埋め込む |
 | `--date` | 当日 | フッターの日付。`none` で非表示 |
 | `--report PATH` | | 容量レポートを JSON で書く |
-| `--reflow` | | `build`: ページ割りをやり直して JSON を書き換える |
-| `--no-write-back` | | `build`: 自動送りを JSON に書き戻さない |
+| `--reflow` | | `build`: ページ割りをやり直す。JSON 入力なら JSON を書き換えて終了、HTML 入力なら再生成まで行う |
+| `--no-write-back` | | `build`: 自動送りを JSON に書き戻さない (JSON 入力のみ) |
+
+`check` と `build` の入力はコンテンツ JSON か、`build` が生成した HTML です。HTML を入力にすると埋め込まれたレイアウト設定が既定値になり、`--layout` と CLI オプションはそれを上書きします。`build out.html` の出力先の既定は同じファイル (その場で再生成) です。
 
 終了コード: `0` 成功 (自動送りを含む)、`1` 入力または依存関係のエラー、`2` 検証が収束しない。
 
@@ -195,7 +205,7 @@ md2html/
 │   │           ├── editing_guide.md     # エージェントが JSON を編集する手順
 │   │           └── vendor/              # Mermaid.js、Font Awesome Free (THIRD_PARTY_NOTICES.md 参照)
 │   └── opencode/README.md
-├── tests/                               # pytest (ページ割り規則、スキーマ、インライン分割、取り込み)
+├── tests/                               # pytest (ページ割り規則、スキーマ、インライン分割、取り込み、HTML 埋め込み)
 └── docs/QUICKSTART.md, QUICKSTART_ja.md
 ```
 

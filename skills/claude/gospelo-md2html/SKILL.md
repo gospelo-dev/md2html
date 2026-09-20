@@ -1,10 +1,11 @@
 ---
 name: gospelo-md2html
 description: >
-  Convert Markdown + Mermaid into paginated, print-quality HTML and PDF with a
-  chosen paper size (A4 / A3 portrait or landscape, 16:9, 4:3 slides) and body
-  font size. Content lives in an editable content JSON (one object per page,
-  tables and lists editable by hand); layout lives in a layout JSON / CLI.
+  Turn Markdown + Mermaid into layout-aware, paginated HTML slide decks
+  (16:9, 4:3) and documents (A4 / A3, portrait or landscape) plus PDF, with a
+  chosen body font size. Content lives in an editable content JSON (one object
+  per page) that is also embedded in the HTML, so a generated HTML can be
+  edited and rebuilt on its own; the original Markdown is preserved inside.
   Use this skill when the user says "md2html", "markdown to html", "markdown to
   pdf", "A4 で出力", "スライドにする", "16:9", "4:3", "印刷用", "ページ区切り",
   "文字サイズを指定して HTML", or wants to edit a page of a generated document.
@@ -34,7 +35,11 @@ uv run <skill>/scripts/md2html.py setup
 1. `import --dry-run` でページ数と警告を確認し、利用者に見せる。
 2. `import` でコンテンツ JSON を書く。以降の編集対象はこの JSON だけ。
 3. 内容を直すときは JSON の該当ページの `blocks` だけを編集する
-   (`references/editing_guide.md`)。HTML / CSS は編集しない。
+   (`references/editing_guide.md`)。描画された HTML / CSS は編集しない。
+   生成 HTML しか手元に無い場合は、HTML 内の
+   `<script type="application/json" id="md2html-content">` の JSON だけを編集し、
+   その HTML を `check` / `build` の入力にする (`build out.html` で同じファイルを再生成)。
+   レイアウト設定も HTML に埋め込まれているので、オプションの再指定は不要。
 4. 編集後は `check --report` で残り容量と自動送り (`spills`) を確認する。
    内容を削ってページに収めることはしない。
 5. `build` で HTML (と `--pdf`) を出す。はみ出しは同じタイトルの続きページへ自動で
@@ -53,6 +58,8 @@ S=<skill>/scripts/md2html.py
 uv run $S import  INPUT.md -o content.json --page 16x9 --font-size 14pt [--dry-run] [--force]
 uv run $S check   content.json --page 16x9 --font-size 14pt --report report.json
 uv run $S build   content.json -o out.html --page 16x9 --font-size 14pt [--pdf out.pdf] [--reflow] [--no-write-back]
+uv run $S check   out.html                       # HTML を入力に (埋め込みの JSON とレイアウトを使う)
+uv run $S build   out.html [--pdf out.pdf]        # HTML を同じ場所に再生成
 uv run $S restore content.json|out.html -o original.md
 ```
 

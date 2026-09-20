@@ -126,6 +126,9 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | --- | --- | --- |
 | `--page` | `a4` | `a4` / `a4-landscape` / `a3` / `a3-landscape` / `16x9` / `4x3` |
 | `--font-size` | A4 11pt, A3 12pt, slides 14pt | Body size in `pt`, `px` or `mm`; every other dimension derives from it |
+| `--font-family` | BIZ UDPGothic, then Hiragino, Noto Sans JP | CSS font-family list for body text and diagram labels, e.g. `"'Noto Sans JP', sans-serif"`. Recorded in the file. Prefer fonts Chromium can embed in PDF: static (non-variable) glyf TrueType such as BIZ UD or the static Noto Sans JP TTFs. The CFF-based Hiragino is replaced by a 2 MB Osaka-Mono in the PDF, and a variable font is converted to outlines (large PDF, text not selectable) |
+| `--code-font-family` | SFMono, Menlo, BIZ UDGothic | CSS font-family list for code and inline code. Keep a CJK-capable monospace in the list, or Japanese inside code falls back to Osaka-Mono in the PDF |
+| `--no-embed-fonts` | off (fonts embedded) | Do not embed the BIZ UD subsets. By default the file carries `@font-face` subsets of BIZ UDPGothic (Regular and Bold) and BIZ UDGothic (Regular) covering only the characters the document uses, so viewers need no font installed and the PDF embeds the same subsets. A 15-page Japanese deck adds about 0.3 MB; see the fonts section below |
 | `--title-scale` | `1.25` | Slide header title size relative to body |
 | `--header-title` | `section` | `section` (current h2), `doc` (document h1) or `fixed:<text>` |
 | `--columns` | landscape `two`, portrait `single` | `two` (column order, left column then right, with full-width bands), `split` (one figure beside the text), `single` |
@@ -147,6 +150,12 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--no-write-back` | | `build`: do not write spills back to a `.gospelo.json` input |
 
 `check` and `build` take a `.gospelo.html` or a `.gospelo.json`. The layout recorded in the file is the default and `--layout` / CLI options override it; `build out.gospelo.html` rewrites the same file by default, and `build out.gospelo.json` writes `out.gospelo.html`.
+
+### Fonts: embedded subsets
+
+The generated HTML carries its Japanese fonts. `import` and `build` collect the characters the document uses and write subsets of the bundled BIZ UD fonts (SIL Open Font License) into the `<style>` block as `@font-face` data URIs: BIZ UDPGothic Regular for body text, BIZ UDPGothic Bold for headings, table headers and `**bold**` only, and BIZ UDGothic Regular for code only. The same subsets are used while measuring, so pagination does not depend on the fonts installed on the building machine, and a reader on macOS, Windows or Linux sees the same glyphs without installing anything. The cost is size: a 15-page 16:9 deck grew from 0.46 MB to 0.77 MB, and its PDF shrank from 0.40 MB to 0.24 MB because Chromium embeds the subsets instead of a system font.
+
+Only the bundled families are embedded. If `--font-family` names another font, that font must be installed wherever the file is viewed. `--no-embed-fonts` (layout `embedFonts: false`) turns embedding off, for example when the file is only viewed on machines that have BIZ UD installed. Latin text still comes from the first installed font in the stack (`-apple-system`, Helvetica Neue) when there is one, and from BIZ UDPGothic otherwise.
 
 ### PPTX export: what you get and what you do not
 

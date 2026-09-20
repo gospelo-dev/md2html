@@ -24,7 +24,7 @@ flowchart TB
         direction TB
         SIG["2 行目: コメント gospelo-document 1<br/>html data-gospelo-document=1"]
         ENV["script type=application/json id=gospelo-document<br/>エンベロープ: format, version, generator, meta, layout, pages<br/>(pages[0] = 原文 Markdown)"]
-        S["style: 計算済み変数を含む base.css"]
+        S["style: BIZ UD フォントのサブセット (約 0.3 MB)、<br/>計算済み変数、base.css"]
         SIG --> ENV --> S
     end
     subgraph Body["2. 本体 (描画済み、build が再生成)"]
@@ -55,6 +55,7 @@ flowchart TB
 | 署名 | 2 行目の `<!-- gospelo-document 1 -->` と `<html>` の `data-gospelo-document="1"`。拡張子に関係なく先頭数バイトで形式が分かる |
 | エンベロープ 1 ブロック、`<head>` の先頭 | すべての `<style>` と他のすべての `<script>` より前。3.1 MB のスライドでは 282 バイト目から始まり約 37 KB で終わり、読み手が最初に取る 64 KB のチャンクに収まる |
 | 原文 Markdown はエンベロープの中 | `pages[0]`、`kind: "source"`。別の Markdown ブロックは持たず、データは 1 か所だけ |
+| フォントは `<style>` の中 | 同梱の BIZ UD (OFL) をエンベロープに含まれる文字だけに絞ったサブセットを `@font-face` の data URI で持つ。本文に Regular、見出しと強調に Bold、コードに BIZ UDGothic。計測ページも同じ CSS を使うので、ページ割りはインストール済みフォントに左右されない。`embedFonts: false` で省く |
 | 図は SVG (既定の `prerender`) | 検証パスが Chromium で各 Mermaid ブロックを描き、最終ファイルにはその SVG を図の中に書く。ライブラリは同梱しない。ソースはエンベロープに残るので `build` が描き直す |
 | Mermaid ライブラリは `<body>` の末尾 (`embed` / `link`) | 直前に MIT 表示のコメント。Mermaid は DOM 構築後に初期化されるので位置は描画に影響しない。その後に `figures.js`、ページ番号スクリプト |
 | 描画済みページは build のたびに再生成 | DOM は派生データであり、直接編集は対象外 |

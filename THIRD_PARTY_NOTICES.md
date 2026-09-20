@@ -10,6 +10,14 @@ URI at HTML generation time).
 | `mermaid/<version>/mermaid.min.js` | Mermaid 11.12.2 | MIT (Copyright (c) 2014-2025 Knut Sveidqvist) | https://github.com/mermaid-js/mermaid |
 | `fontawesome.min.css`, `fa-solid.min.css` | Font Awesome Free 6.7.2 | MIT (CSS/code) | https://github.com/FortAwesome/Font-Awesome |
 | `fa-solid-900.woff2` | Font Awesome Free 6.7.2 | SIL OFL 1.1 (font), icons CC BY 4.0 | https://fontawesome.com/license/free |
+| `fonts/bizud/BIZUDPGothic-{Regular,Bold}.woff2`, `fonts/bizud/BIZUDGothic-{Regular,Bold}.woff2` | BIZ UDGothic / BIZ UDPGothic (Google Fonts release) | SIL OFL 1.1 (Copyright 2022 The BIZ UDGothic Project Authors; no Reserved Font Name), text in `fonts/bizud/OFL.txt` | https://github.com/googlefonts/morisawa-biz-ud-gothic |
+
+The BIZ UD files are the unmodified TTFs of the Google Fonts release converted
+to WOFF2 (a lossless container change). At build time the tool subsets them to
+the characters a document uses and embeds the subsets in the generated HTML;
+the OFL permits subsetting and embedding, and requires no attribution inside
+the document. Section 5 of the OFL says the font cannot be sold by itself; it
+travels inside the documents you produce, which is permitted.
 
 ## Mermaid: per-version vendoring
 
@@ -33,10 +41,11 @@ string inside the bundle; the tool checks this.
 
 In the default `prerender` mode the generated HTML contains the SVG that
 Mermaid.js drew, but not the library itself, so no Mermaid notice is needed in
-the document. In `embed` and `link` mode the HTML embeds (or links) Mermaid.js,
-and whenever `fa:` icons are used it embeds the Font Awesome Free Solid font.
-Documents you distribute in those cases carry the licenses' attribution
-requirements:
+the document. By default it also contains subsets of the BIZ UD fonts (OFL,
+no notice required in the document; `--no-embed-fonts` omits them). In `embed`
+and `link` mode the HTML embeds (or links) Mermaid.js, and whenever `fa:` icons
+are used it embeds the Font Awesome Free Solid font. Documents you distribute
+in those cases carry the licenses' attribution requirements:
 
 - Mermaid: the tool writes an HTML comment with the version, the copyright line
   and the full MIT permission notice immediately before the library, in both
@@ -54,3 +63,5 @@ Runtime dependencies resolved by `uv` at execution time (not vendored):
 | playwright (Python) | Apache-2.0 (Chromium is downloaded by Playwright under its own licenses) |
 | python-pptx (PPTX export) | MIT |
 | Pillow (pulled in by python-pptx) | MIT-CMU (HPND) |
+| fonttools (font subsetting) | MIT |
+| Brotli (WOFF2 compression for fonttools) | MIT |

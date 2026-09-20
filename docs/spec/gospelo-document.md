@@ -39,7 +39,7 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 <script type="application/json" id="gospelo-document">
 { ...envelope... }
 </script>
-<style>...</style>
+<style>...@font-face subsets (layout.embedFonts), computed variables, base.css...</style>
 </head>
 <body>
 <section class="page" data-page-id="p01">...</section>
@@ -135,7 +135,7 @@ A conforming writer:
 
 - Images are referenced by `src` as a path relative to the file, or embedded as a `data:` URI when `layout.embedImages` is true.
 - Mermaid diagrams are always stored as source in the envelope. With `layout.mermaidLib` `prerender` (default) the writer draws each diagram during its verify pass and places the resulting `<svg>` inside the rendered figure; no library is shipped. With `embed` the library is inlined at the end of `<body>` and the browser draws the source; with `link` a `mermaid-<version>.min.js` next to the file is referenced (with its `LICENSE.mermaid-<version>.txt`). The version used is recorded in `layout.mermaidVersion` and reused on every rebuild, in every mode.
-- Fonts are not embedded except the Font Awesome subset needed by `fa:` icons in Mermaid sources.
+- Fonts: when `layout.embedFonts` is true (default) the writer embeds subsets of its bundled fonts (BIZ UDPGothic Regular and Bold, BIZ UDGothic Regular; SIL OFL 1.1), cut to the characters the document uses, as `@font-face` data URIs inside the `<style>` element, before the computed variables. Only the bundled families that appear in `layout.fontFamily` / `layout.codeFontFamily` (or the default stacks) are embedded; any other family named there is expected on the viewer's machine. Besides these, only the Font Awesome subset needed by `fa:` icons in Mermaid sources is embedded.
 
 ## 9. Files written before this format
 

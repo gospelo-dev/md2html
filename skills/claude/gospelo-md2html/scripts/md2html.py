@@ -6,6 +6,8 @@
 #   "mdit-py-plugins>=0.4",
 #   "playwright>=1.45",
 #   "python-pptx>=0.6.23",
+#   "fonttools>=4.50",
+#   "brotli>=1.1",
 # ]
 # ///
 """gospelo-md2html: Markdown + Mermaid -> paginated HTML / PDF.
@@ -31,6 +33,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from md2html import assets, blocks as blocks_mod, content as content_mod, report as report_mod  # noqa: E402
+from md2html.fonts import embedded_font_css  # noqa: E402
 from md2html.formats import get_format  # noqa: E402
 from md2html.layout import Layout, LayoutError, build_layout  # noqa: E402
 from md2html.measure import Browser, MeasureError, measure_document, verify_document  # noqa: E402
@@ -58,6 +61,12 @@ def _add_layout_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--layout", type=Path, help="layout JSON (CLI options win)")
     g.add_argument("--page", choices=["a4", "a4-landscape", "a3", "a3-landscape", "16x9", "4x3"])
     g.add_argument("--font-size", dest="font_size", help="body font size: 11pt / 14px / 3.5mm")
+    g.add_argument("--font-family", dest="font_family",
+                   help="CSS font-family list for body text, e.g. \"'Noto Sans JP', sans-serif\" (default: base.css stack)")
+    g.add_argument("--code-font-family", dest="code_font_family",
+                   help="CSS font-family list for code and inline code (default: base.css stack)")
+    g.add_argument("--no-embed-fonts", dest="embed_fonts", action="store_const", const=False,
+                   help="do not embed subsets of the vendored BIZ UD fonts (the viewer's own fonts are used)")
     g.add_argument("--title-scale", dest="title_scale", type=float)
     g.add_argument("--header-title", dest="header_title", help="section | doc | fixed:<text>")
     g.add_argument("--columns", choices=["two", "split", "single"],
@@ -126,7 +135,8 @@ def make_parser() -> argparse.ArgumentParser:
 
 def layout_from_args(args: argparse.Namespace, base: dict[str, Any] | None = None) -> Layout:
     cli = {
-        "page": args.page, "font_size": args.font_size, "title_scale": args.title_scale,
+        "page": args.page, "font_size": args.font_size, "font_family": args.font_family,
+        "code_font_family": args.code_font_family, "embed_fonts": args.embed_fonts, "title_scale": args.title_scale,
         "header_title": args.header_title, "columns": args.columns, "figure_side": args.figure_side,
         "split_ratio": args.split_ratio, "details": args.details, "mermaid_lib": args.mermaid_lib,
         "mermaid_version": args.mermaid_version, "hr_break": args.hr_break, "image_scale": args.image_scale, "embed_images": args.embed_images,
@@ -376,7 +386,9 @@ def cmd_import(args: argparse.Namespace) -> int:
     image_base = src.resolve().parent
     work_dir = out_path.resolve().parent
     work_dir.mkdir(parents=True, exist_ok=True)
-    measure_ctx = RenderContext(metrics, layout, image_base, None)
+    # the block list holds every character the paginated pages can show, so the subset is final here
+    font_css = _font_css(doc, layout, block_list)
+    measure_ctx = RenderContext(metrics, layout, image_base, None, font_css=font_css)
 
     with Browser() as browser:
         heights_col, heights_single = measure_heights(browser, block_list, measure_ctx, work_dir)
@@ -392,8 +404,8 @@ def cmd_import(args: argparse.Namespace) -> int:
         # Settle: the same measure / spill / verify pass that `build` runs. The first pass placed
         # split blocks (table rows, list items) by estimated heights; this pass measures them as
         # they really render, so a later `build` of the written JSON does not move anything.
-        pages, _, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose)
-        final_ctx = RenderContext(metrics, layout, image_base, work_dir, layout.embed_images)
+        pages, _, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose, font_css)
+        final_ctx = RenderContext(metrics, layout, image_base, work_dir, layout.embed_images, font_css=font_css)
         _, verify, rounds, final_pages = verify_and_fix(browser, doc, pages, final_ctx, date, work_dir, args.verbose, relayout)
     # spills and pushes add pages such as p09-2: renumber sequentially
     old_ids = [[b.get("id") for b in p["blocks"]] for p in final_pages]
@@ -455,6 +467,19 @@ def _notes_dict(notes: blocks_mod.ImportNotes) -> dict[str, Any]:
     }
 
 
+def _font_css(doc: dict[str, Any], layout: Layout, blocks: list[dict[str, Any]] | None = None) -> str:
+    """@font-face rules for the embedded font subsets; computed once per command and used by
+    the measurement pages as well as the final HTML so pagination is machine-independent.
+    `blocks` is the not-yet-paginated block list on import; otherwise the content pages are used."""
+    pages = content_mod.content_pages(doc)
+    if blocks is None:
+        blocks = [b for p in pages for b in p["blocks"]]
+    titles = [doc["meta"]["title"]] + [p["title"] for p in pages if p.get("title")]
+    if layout.header_title.startswith("fixed:"):
+        titles.append(layout.header_title[len("fixed:"):])
+    return embedded_font_css(blocks, titles, layout)
+
+
 def _prepare_build(args: argparse.Namespace):
     """Input is a Gospelo Document (.gospelo.html or .gospelo.json). Its layout is
     the base; --layout and CLI options override it."""
@@ -466,11 +491,12 @@ def _prepare_build(args: argparse.Namespace):
     return content_path, doc, layout, metrics, image_base
 
 
-def _build_pages(browser: Browser, doc, layout: Layout, metrics: Metrics, image_base: Path, work_dir: Path, verbose: bool):
+def _build_pages(browser: Browser, doc, layout: Layout, metrics: Metrics, image_base: Path, work_dir: Path, verbose: bool,
+                 font_css: str = ""):
     """Measure all blocks, spill per page. Returns (pages, spills, warnings)."""
     pages = content_mod.content_pages(doc)
     all_blocks = [b for p in pages for b in p["blocks"]]
-    measure_ctx = RenderContext(metrics, layout, image_base, None)
+    measure_ctx = RenderContext(metrics, layout, image_base, None, font_css=font_css)
     heights_col, heights_single = measure_heights(browser, all_blocks, measure_ctx, work_dir)
     if verbose:
         print_verbose_heights(heights_col)
@@ -519,9 +545,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     content_path, doc, layout, metrics, image_base = _prepare_build(args)
     work_dir = content_path.resolve().parent
     date = date_text(layout, doc["meta"].get("date"))
+    font_css = _font_css(doc, layout)
     with Browser() as browser:
-        pages, spills, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose)
-        final_ctx = RenderContext(metrics, layout, image_base, work_dir, layout.embed_images)
+        pages, spills, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, work_dir, args.verbose, font_css)
+        final_ctx = RenderContext(metrics, layout, image_base, work_dir, layout.embed_images, font_css=font_css)
         _, verify, rounds, _ = verify_and_fix(browser, doc, pages, final_ctx, date, work_dir, args.verbose, relayout)
     report = report_mod.build_report(metrics, metrics.columns, verify, [s.__dict__ | {"from": s.source, "to": s.target} for s in spills], warnings)
     report["verifyRounds"] = rounds
@@ -553,9 +580,10 @@ def cmd_build(args: argparse.Namespace) -> int:
         for w in reflow_warnings:
             print(f"  warning: {w}")
 
+    font_css = _font_css(doc, layout)
     with Browser() as browser:
-        pages, spills, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, out_dir, args.verbose)
-        final_ctx = RenderContext(metrics, layout, image_base, out_dir, layout.embed_images)
+        pages, spills, warnings, relayout = _build_pages(browser, doc, layout, metrics, image_base, out_dir, args.verbose, font_css)
+        final_ctx = RenderContext(metrics, layout, image_base, out_dir, layout.embed_images, font_css=font_css)
         html_text, verify, rounds, final_pages = verify_and_fix(browser, doc, pages, final_ctx, date, out_dir, args.verbose, relayout)
         out_path.write_text(html_text, encoding="utf-8")
         print(f"wrote {out_path}")
@@ -596,7 +624,7 @@ def _reflow_doc(doc, layout: Layout, metrics: Metrics, image_base: Path, work_di
     flat = flatten_for_reflow(doc["pages"])
     for i, b in enumerate(flat):
         b["id"] = f"b{i}"
-    measure_ctx = RenderContext(metrics, layout, image_base, None)
+    measure_ctx = RenderContext(metrics, layout, image_base, None, font_css=_font_css(doc, layout, flat))
     with Browser() as browser:
         heights_col, heights_single = measure_heights(browser, flat, measure_ctx, work_dir)
         pctx = make_paginate_ctx(metrics, metrics.columns, heights_col, heights_single, doc["meta"]["title"], layout)

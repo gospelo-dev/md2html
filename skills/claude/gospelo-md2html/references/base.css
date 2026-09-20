@@ -5,7 +5,11 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { font-size: var(--font-size); }
 body {
-  font-family: -apple-system, 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  /* Japanese: BIZ UDPGothic first. It is a glyf TrueType that Chromium's PDF writer subsets
+     (about 60KB per document); the CFF-based Hiragino cannot be embedded and is replaced by a
+     2MB unsubsetted Osaka-Mono in the PDF. BIZ UD ships with Windows 10+ and macOS Office. */
+  /* --font-family is set from layout.fontFamily (--font-family); the fallback list is the default stack */
+  font-family: var(--font-family, -apple-system, 'Helvetica Neue', 'BIZ UDPGothic', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif);
   color: #222; line-height: var(--line-height); font-size: var(--font-size);
   line-break: strict; overflow-wrap: anywhere;
 }
@@ -88,10 +92,11 @@ th.right, td.right { text-align: right; }
 table.continued caption { caption-side: top; text-align: left; font-size: calc(var(--font-size) * 0.8); color: #888; padding-bottom: calc(var(--font-size) * 0.2); }
 
 pre.code { background: #f6f8fa; border: 1px solid #e8e8e8; border-radius: 4px; padding: calc(var(--font-size) * 0.8); margin: calc(var(--font-size) * 0.5) 0 calc(var(--font-size) * 1.0); font-size: calc(var(--font-size) * 0.85); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-pre.code code { display: block; padding: 0; background: none; border-radius: 0; font-family: 'SFMono-Regular', Menlo, 'Noto Sans Mono CJK JP', monospace; font-size: inherit; }
+pre.code code { display: block; padding: 0; background: none; border-radius: 0; font-family: var(--code-font-family, 'SFMono-Regular', Menlo, 'BIZ UDGothic', 'Noto Sans Mono CJK JP', monospace); font-size: inherit; }
 pre.code .line { display: block; }
 pre.code .continued-note { display: block; color: #888; font-family: inherit; margin-bottom: calc(var(--font-size) * 0.3); }
-code { font-family: 'SFMono-Regular', Menlo, 'Noto Sans Mono CJK JP', monospace; font-size: 0.9em; background: #f4f4f4; padding: 0 0.3em; border-radius: 3px; }
+/* CJK text inside code needs an embeddable monospace fallback; without it Chromium's PDF picks Osaka-Mono */
+code { font-family: var(--code-font-family, 'SFMono-Regular', Menlo, 'BIZ UDGothic', 'Noto Sans Mono CJK JP', monospace); font-size: 0.9em; background: #f4f4f4; padding: 0 0.3em; border-radius: 3px; }
 
 blockquote { border-left: 2px solid #ddd; padding-left: var(--font-size); color: #444; margin: calc(var(--font-size) * 0.5) 0 calc(var(--font-size) * 1.0); }
 blockquote p:last-child { margin-bottom: 0; }

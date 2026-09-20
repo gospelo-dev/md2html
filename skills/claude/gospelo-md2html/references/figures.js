@@ -12,11 +12,16 @@
     var mermaidNodes = document.querySelectorAll("pre.mermaid");
     if (mermaidNodes.length > 0) {
       if (!window.mermaid) { throw new Error("mermaid library is not loaded"); }
+      // Diagram text uses the document's body font stack (not Mermaid's Trebuchet default), so
+      // Japanese labels resolve to the same embeddable font as the body in the PDF.
       window.mermaid.initialize({
         startOnLoad: false,
         theme: "base",
         securityLevel: "loose",
-        themeVariables: { fontSize: root.dataset.mermaidFontSize || "14px" }
+        themeVariables: {
+          fontSize: root.dataset.mermaidFontSize || "14px",
+          fontFamily: getComputedStyle(document.body).fontFamily
+        }
       });
       await window.mermaid.run({ nodes: mermaidNodes, suppressErrors: false });
     }

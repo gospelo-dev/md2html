@@ -125,6 +125,9 @@ uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/hando
 | --- | --- | --- |
 | `--page` | `a4` | `a4` / `a4-landscape` / `a3` / `a3-landscape` / `16x9` / `4x3` |
 | `--font-size` | A4 11pt、A3 12pt、スライド 14pt | 本文サイズ (`pt`、`px`、`mm`)。他の寸法は全てここから導出 |
+| `--font-family` | BIZ UDPGothic、次に Hiragino、Noto Sans JP | 本文と図のラベルの CSS font-family リスト。例: `"'Noto Sans JP', sans-serif"`。ファイルに記録される。Chromium が PDF に埋め込めるフォント (BIZ UD や Noto Sans JP の静的 TTF など、可変フォントでない glyf 形式) を選ぶこと。CFF 形式の Hiragino は PDF で 2MB の Osaka-Mono に置き換わり、可変フォントはアウトライン化される (PDF が大きくなり文字が選択できない) |
+| `--code-font-family` | SFMono、Menlo、BIZ UDGothic | コードとインラインコードの CSS font-family リスト。CJK 対応の等幅フォントを含めないと、コード中の日本語が PDF で Osaka-Mono に落ちる |
+| `--no-embed-fonts` | off (埋め込む) | BIZ UD のサブセット埋め込みをやめる。既定では BIZ UDPGothic (Regular と Bold) と BIZ UDGothic (Regular) を、文書で使う文字だけに絞って `@font-face` として埋め込むので、閲覧側にフォントは不要で、PDF にも同じサブセットが入る。日本語 15 ページのスライドで約 0.3MB 増える。下の「フォント」を参照 |
 | `--title-scale` | `1.25` | スライドのヘッダータイトルの本文比 |
 | `--header-title` | `section` | `section` (直近の h2)、`doc` (文書の h1)、`fixed:<text>` |
 | `--columns` | 横長 `two`、縦長 `single` | `two` (2 段組 (左段 → 右段)。幅いっぱいの帯あり)、`split` (図 1 枚をテキストの隣に)、`single` (単段) |
@@ -146,6 +149,12 @@ uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/hando
 | `--no-write-back` | | `build`: 自動送りを `.gospelo.json` 入力に書き戻さない |
 
 `check` と `build` の入力は `.gospelo.html` か `.gospelo.json` です。ファイルに記録されたレイアウトが既定値になり、`--layout` と CLI オプションはそれを上書きします。`build out.gospelo.html` は同じファイルを再生成し、`build out.gospelo.json` は `out.gospelo.html` を書きます。
+
+### フォント: サブセットの埋め込み
+
+生成した HTML は日本語フォントを自分で持ちます。`import` と `build` は文書で使う文字を集め、同梱の BIZ UD フォント (SIL Open Font License) をその文字だけに絞って `<style>` 内に `@font-face` の data URI として書き込みます。本文には BIZ UDPGothic Regular、見出し・表の見出し行・`**太字**` だけに BIZ UDPGothic Bold、コードだけに BIZ UDGothic Regular です。計測にも同じサブセットを使うので、ページ割りは生成側の環境にインストールされたフォントに左右されず、macOS、Windows、Linux のどれで開いても何も入れずに同じ字形で表示されます。代償はサイズで、16:9 の 15 ページのスライドは 0.46MB から 0.77MB になり、PDF は Chromium がシステムフォントの代わりにこのサブセットを埋め込むため 0.40MB から 0.24MB に減りました。
+
+埋め込むのは同梱の書体だけです。`--font-family` で別の書体を指定した場合、その書体は閲覧側の環境に必要です。`--no-embed-fonts` (レイアウトの `embedFonts: false`) で埋め込みをやめられます (BIZ UD が入っている環境でしか開かない場合など)。欧文は、スタックの先頭にある書体 (`-apple-system`、Helvetica Neue) が入っていればそれで、無ければ BIZ UDPGothic で表示されます。
 
 ### PPTX 出力: できることとできないこと
 

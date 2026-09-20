@@ -15,6 +15,9 @@ from typing import Any
 LAYOUT_KEYS = {
     "page": str,
     "fontSize": str,
+    "fontFamily": (str, type(None)),
+    "codeFontFamily": (str, type(None)),
+    "embedFonts": bool,
     "titleScale": (int, float),
     "headerTitle": str,
     "columns": str,
@@ -43,6 +46,9 @@ class LayoutError(ValueError):
 class Layout:
     page: str = "a4"
     font_size: str | None = None
+    font_family: str | None = None       # CSS font-family list for body text; None = base.css default stack
+    code_font_family: str | None = None  # same for code and inline code
+    embed_fonts: bool = True             # embed subsets of the vendored BIZ UD fonts used by the stacks
     title_scale: float = 1.25
     header_title: str = "section"
     columns: str | None = None
@@ -71,6 +77,9 @@ class Layout:
 _CAMEL_TO_FIELD = {
     "page": "page",
     "fontSize": "font_size",
+    "fontFamily": "font_family",
+    "codeFontFamily": "code_font_family",
+    "embedFonts": "embed_fonts",
     "titleScale": "title_scale",
     "headerTitle": "header_title",
     "columns": "columns",
@@ -158,6 +167,9 @@ def _check(layout: Layout) -> None:
         raise LayoutError(f"invalid header title mode {layout.header_title!r}")
     if layout.details not in ("drop", "expand"):
         raise LayoutError(f"invalid details mode {layout.details!r}")
+    for name, value in (("fontFamily", layout.font_family), ("codeFontFamily", layout.code_font_family)):
+        if value is not None and (not value.strip() or any(c in value for c in "<>{};")):
+            raise LayoutError(f"invalid {name} {value!r}: expected a CSS font-family list such as \"'Noto Sans JP', sans-serif\"")
     if layout.mermaid_lib not in ("prerender", "embed", "link"):
         raise LayoutError(f"invalid mermaid lib mode {layout.mermaid_lib!r}: expected prerender, embed or link")
     if layout.mermaid_version is not None and not re.match(r"^\d+\.\d+\.\d+$", layout.mermaid_version):

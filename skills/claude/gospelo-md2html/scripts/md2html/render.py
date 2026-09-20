@@ -28,6 +28,7 @@ class RenderContext:
     html_dir: Path | None       # output directory (None = measurement, use absolute file paths)
     embed_images: bool = False
     svgs: dict[str, str] | None = None  # prerendered Mermaid SVG per block id (from the verify pass)
+    font_css: str = ""                  # @font-face rules for the embedded font subsets (fonts.py)
 
 
 def _esc(s: str) -> str:
@@ -256,13 +257,23 @@ def _head(ctx: RenderContext, title: str, needs_fa: bool, envelope: dict[str, An
     if envelope is not None:
         parts.append(f'<meta name="generator" content="{_esc(GENERATOR)}">')
         parts.append(envelope_script(envelope))
-    parts.append("<style>\n" + m.css_vars() + assets.base_css() + "\n</style>")
+    parts.append("<style>\n" + ctx.font_css + m.css_vars() + _font_vars(ctx.layout) + assets.base_css() + "\n</style>")
     if ctx.layout.css:
         parts.append("<style>\n" + Path(ctx.layout.css).read_text(encoding="utf-8") + "\n</style>")
     if needs_fa:
         parts.append(assets.fontawesome_style_tag())
     parts.append("</head>")
     return "\n".join(parts)
+
+
+def _font_vars(layout: Layout) -> str:
+    """CSS variables that override the base.css font stacks when the layout sets them."""
+    lines = []
+    if layout.font_family:
+        lines.append(f"  --font-family: {layout.font_family};")
+    if layout.code_font_family:
+        lines.append(f"  --code-font-family: {layout.code_font_family};")
+    return ":root {\n" + "\n".join(lines) + "\n}\n" if lines else ""
 
 
 def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, out_dir: Path | None) -> list[str]:

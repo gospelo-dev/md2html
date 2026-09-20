@@ -75,7 +75,13 @@ python <skill>/scripts/extract_markdown.py old.html -o original.md   # 旧形式
 
 用紙: `a4` (既定) / `a4-landscape` / `a3` / `a3-landscape` / `16x9` / `4x3`。
 文字サイズの既定は A4 11pt、A3 12pt、スライド 14pt。用紙と文字サイズは `import`
-に渡す (ページ割りに使う)。`build` で変えるときは `--reflow`。
+に渡す (ページ割りに使う)。`build` で変えるときは `--reflow`。フォントは `--font-family` と
+`--code-font-family` (CSS の font-family リスト) で差し替えられ、エンベロープの `layout` に記録される。
+PDF を小さく保つには glyf 形式の静的フォント (BIZ UD、Noto Sans JP の静的 TTF) を選ぶ。CFF 形式の
+Hiragino は埋め込めず、可変フォントはアウトライン化されるため、どちらも PDF が大きくなる。
+既定では同梱の BIZ UD (OFL) を文書で使う文字だけに絞って `@font-face` で HTML に埋め込むので、
+閲覧側にフォントは不要 (15 ページで約 0.3MB 増)。`--no-embed-fonts` でやめられる。
+`--font-family` で別の書体を指定した場合、その書体は埋め込まれない (閲覧側に必要)。
 
 段組 (`--columns`): 横長の用紙は既定で 2 段組 (`two`: 左段 → 右段。左段の上から下へ、次に右段へ
 流す。列数 4 以上の表、コード、横長の図は幅いっぱいの帯)、縦長は単段 (`single`)。

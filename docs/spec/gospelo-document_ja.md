@@ -39,7 +39,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 <script type="application/json" id="gospelo-document">
 { ...エンベロープ... }
 </script>
-<style>...</style>
+<style>...@font-face のサブセット (layout.embedFonts)、計算済み変数、base.css...</style>
 </head>
 <body>
 <section class="page" data-page-id="p01">...</section>
@@ -135,7 +135,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 
 - 画像は `src` でファイルからの相対パスを参照するか、`layout.embedImages` が真なら `data:` URI で埋め込む。
 - Mermaid 図は常にソースとしてエンベロープに保持する。`layout.mermaidLib` が `prerender` (既定) なら、書き手は検証パスで各図を描き、その `<svg>` を描画済みの図の中に置く。ライブラリは同梱しない。`embed` では `<body>` 末尾にライブラリを埋め込みブラウザがソースを描く。`link` ではファイルの隣の `mermaid-<version>.min.js` を参照する (`LICENSE.mermaid-<version>.txt` を併置)。使った版はどのモードでも `layout.mermaidVersion` に記録し、再生成のたびに同じ版を使う。
-- フォントは埋め込まない。例外は Mermaid ソースの `fa:` アイコンに必要な Font Awesome のサブセット。
+- フォント: `layout.embedFonts` が真 (既定) なら、書き手は同梱フォント (BIZ UDPGothic Regular と Bold、BIZ UDGothic Regular。SIL OFL 1.1) を文書で使う文字だけに絞ったサブセットを、`<style>` 要素の中、計算済み変数より前に `@font-face` の data URI として埋め込む。埋め込むのは `layout.fontFamily` / `layout.codeFontFamily` (または既定スタック) に現れる同梱書体だけで、そこに書かれた他の書体は閲覧側の環境にあるものとする。これ以外に埋め込むのは Mermaid ソースの `fa:` アイコンに必要な Font Awesome のサブセットだけである。
 
 ## 9. 本形式より前に書かれたファイル
 

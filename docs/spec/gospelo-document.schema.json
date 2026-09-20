@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gospelo-dev/md2html/docs/spec/gospelo-document.schema.json",
+  "title": "Gospelo Document v1",
+  "description": "The envelope embedded in a .gospelo.html file (script id=gospelo-document) and written as a .gospelo.json sidecar. It holds the original Markdown (pages[0], kind=source), the layout, and one object per rendered page.",
+  "type": "object",
+  "required": ["format", "version", "meta", "layout", "pages"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "gospelo-document" },
+    "version": { "const": 1 },
+    "generator": {
+      "type": "string",
+      "description": "Tool and version that wrote the envelope, e.g. gospelo-md2html 0.1.0. Informational."
+    },
+    "meta": { "$ref": "#/$defs/meta" },
+    "layout": { "$ref": "#/$defs/layout" },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/page" },
+      "description": "pages[0] MAY be the source page (kind=source, one markdown block). At least one cover or content page is required."
+    },
+    "extras": { "$ref": "#/$defs/extras" }
+  },
+  "$defs": {
+    "extras": {
+      "type": "object",
+      "description": "Application-specific data. Readers MUST preserve it and MUST NOT rely on it for rendering."
+    },
+    "meta": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "date": { "type": ["string", "null"], "description": "YYYY-MM-DD, or null for none" },
+        "source": { "type": ["string", "null"], "description": "Path of the original Markdown relative to the document file, or null" },
+        "lang": { "type": "string", "description": "BCP 47 language tag for the html lang attribute. Default ja" },
+        "extras": { "$ref": "#/$defs/extras" }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "page": { "enum": ["a4", "a4-landscape", "a3", "a3-landscape", "16x9", "4x3"] },
+        "fontSize": { "type": ["string", "null"], "pattern": "^[0-9.]+(pt|px|mm)$", "description": "Body size F. null means the page format default" },
+        "titleScale": { "type": "number", "exclusiveMinimum": 0 },
+        "headerTitle": { "type": "string", "description": "section | doc | fixed:<text>" },
+        "columns": { "enum": ["two", "split", "single", null] },
+        "figureSide": { "enum": ["left", "right"] },
+        "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+        "details": { "enum": ["drop", "expand"] },
+        "mermaidLib": { "enum": ["embed", "link"] },
+        "mermaidVersion": { "type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Mermaid version the document was paginated with. Writers MUST record it; readers rebuild with the same version" },
+        "hrBreak": { "type": "boolean" },
+        "imageScale": { "type": "number", "exclusiveMinimum": 0 },
+        "embedImages": { "type": "boolean" },
+        "date": { "type": ["string", "null"] },
+        "css": { "type": ["string", "null"] },
+        "overrides": {
+          "type": "object",
+          "description": "Keyed by page id or block id",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "columns": { "enum": ["two", "split", "single"] },
+              "figureSide": { "enum": ["left", "right"] },
+              "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+              "maxHeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "span": { "enum": [1, 2] }
+            }
+          }
+        },
+        "extras": { "$ref": "#/$defs/extras" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "kind", "title", "continued", "blocks"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Unique within the document. Rendered as data-page-id" },
+        "kind": { "enum": ["source", "cover", "content"] },
+        "title": { "type": ["string", "null"] },
+        "continued": { "type": "boolean" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
+        "extras": { "$ref": "#/$defs/extras" }
+      }
+    },
+    "inline": { "type": "string", "description": "Inline Markdown (bold, code, link) kept as text" },
+    "listItem": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "$ref": "#/$defs/inline" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/listItem" } }
+      }
+    },
+    "blockId": { "type": "string", "minLength": 1 },
+    "block": {
+      "oneOf": [
+        { "type": "object", "required": ["type", "level", "text"], "additionalProperties": false,
+          "properties": { "type": { "const": "heading" }, "id": { "$ref": "#/$defs/blockId" }, "level": { "type": "integer", "minimum": 1, "maximum": 4 }, "text": { "$ref": "#/$defs/inline" } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false,
+          "properties": { "type": { "const": "paragraph" }, "id": { "$ref": "#/$defs/blockId" }, "text": { "$ref": "#/$defs/inline" } } },
+        { "type": "object", "required": ["type", "ordered", "items"], "additionalProperties": false,
+          "properties": { "type": { "const": "list" }, "id": { "$ref": "#/$defs/blockId" }, "ordered": { "type": "boolean" }, "start": { "type": "integer" }, "items": { "type": "array", "items": { "$ref": "#/$defs/listItem" } } } },
+        { "type": "object", "required": ["type", "header", "rows"], "additionalProperties": false,
+          "properties": { "type": { "const": "table" }, "id": { "$ref": "#/$defs/blockId" }, "header": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/inline" } }, "rows": { "type": "array", "items": { "type": "array", "items": { "$ref": "#/$defs/inline" } } }, "align": { "type": "array", "items": { "enum": ["left", "center", "right"] } }, "continued": { "type": "boolean" } } },
+        { "type": "object", "required": ["type", "lang", "lines"], "additionalProperties": false,
+          "properties": { "type": { "const": "code" }, "id": { "$ref": "#/$defs/blockId" }, "lang": { "type": ["string", "null"] }, "lines": { "type": "array", "items": { "type": "string" } }, "continued": { "type": "boolean" } } },
+        { "type": "object", "required": ["type", "src", "alt"], "additionalProperties": false,
+          "properties": { "type": { "const": "image" }, "id": { "$ref": "#/$defs/blockId" }, "src": { "type": "string", "description": "Relative path or data: URI" }, "alt": { "type": "string" }, "caption": { "type": ["string", "null"] } } },
+        { "type": "object", "required": ["type", "source"], "additionalProperties": false,
+          "properties": { "type": { "const": "mermaid" }, "id": { "$ref": "#/$defs/blockId" }, "source": { "type": "string" } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false,
+          "properties": { "type": { "const": "quote" }, "id": { "$ref": "#/$defs/blockId" }, "text": { "$ref": "#/$defs/inline" } } },
+        { "type": "object", "required": ["type", "html"], "additionalProperties": false,
+          "properties": { "type": { "const": "html" }, "id": { "$ref": "#/$defs/blockId" }, "html": { "type": "string" } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false,
+          "properties": { "type": { "const": "markdown" }, "id": { "$ref": "#/$defs/blockId" }, "text": { "type": "string" } },
+          "description": "Only allowed on the source page" },
+        { "type": "object", "required": ["type"], "additionalProperties": false,
+          "properties": { "type": { "const": "pagebreak" }, "id": { "$ref": "#/$defs/blockId" } } }
+      ]
+    }
+  }
+}

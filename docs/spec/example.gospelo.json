@@ -1,0 +1,62 @@
+{
+  "format": "gospelo-document",
+  "version": 1,
+  "generator": "gospelo-md2html 0.1.0",
+  "meta": {
+    "title": "Example",
+    "date": "2026-09-21",
+    "source": "example.md",
+    "lang": "ja"
+  },
+  "layout": {
+    "page": "16x9",
+    "fontSize": null,
+    "titleScale": 1.25,
+    "headerTitle": "section",
+    "columns": null,
+    "figureSide": "right",
+    "splitRatio": 0.5,
+    "details": "drop",
+    "mermaidLib": "embed",
+    "hrBreak": false,
+    "imageScale": 1.0,
+    "embedImages": false,
+    "date": null,
+    "css": null,
+    "overrides": {
+      "p02-b1": { "span": 2 }
+    }
+  },
+  "pages": [
+    {
+      "id": "p00",
+      "kind": "source",
+      "title": null,
+      "continued": false,
+      "blocks": [
+        { "type": "markdown", "text": "# Example\n\nIntro.\n\n## Section\n\nBody.\n\n```mermaid\nflowchart LR\n  A --> B\n```\n" }
+      ]
+    },
+    {
+      "id": "p01",
+      "kind": "cover",
+      "title": "Example",
+      "continued": false,
+      "blocks": [
+        { "type": "heading", "level": 1, "text": "Example" },
+        { "type": "paragraph", "text": "Intro." }
+      ]
+    },
+    {
+      "id": "p02",
+      "kind": "content",
+      "title": "Section",
+      "continued": false,
+      "blocks": [
+        { "type": "paragraph", "text": "Body." },
+        { "type": "mermaid", "source": "flowchart LR\n  A --> B" }
+      ],
+      "extras": { "reviewed": true }
+    }
+  ]
+}

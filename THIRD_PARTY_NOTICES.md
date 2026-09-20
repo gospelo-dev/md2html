@@ -13,9 +13,13 @@ URI at HTML generation time).
 
 ## Mermaid: per-version vendoring
 
-Mermaid is kept per version as `mermaid/<version>/mermaid.min.js` with the MIT
-text next to it as `mermaid/<version>/LICENSE.txt`, so that several versions
-can coexist. A generated HTML records the version it was paginated with in its
+The vendored copy is the rendering engine in every mode: the measurement and
+verify passes load it into headless Chromium to draw each diagram (its size
+drives pagination). In the default `prerender` mode the drawn SVG is what ends
+up in the document; in `embed` / `link` mode the library itself is shipped as
+well. Mermaid is kept per version as `mermaid/<version>/mermaid.min.js` with
+the MIT text next to it as `mermaid/<version>/LICENSE.txt`, so that several
+versions can coexist. A generated HTML records the version it was paginated with in its
 embedded layout (`mermaidVersion`) and is rebuilt with that same version;
 new documents default to the newest vendored version. `--mermaid-version X.Y.Z`
 selects one explicitly.
@@ -27,9 +31,12 @@ string inside the bundle; the tool checks this.
 
 ## Notices carried by generated documents
 
-The generated HTML embeds (or links) Mermaid.js and, when `fa:` icons are used,
-the Font Awesome Free Solid font. Documents you distribute therefore carry those
-licenses' attribution requirements:
+In the default `prerender` mode the generated HTML contains the SVG that
+Mermaid.js drew, but not the library itself, so no Mermaid notice is needed in
+the document. In `embed` and `link` mode the HTML embeds (or links) Mermaid.js,
+and whenever `fa:` icons are used it embeds the Font Awesome Free Solid font.
+Documents you distribute in those cases carry the licenses' attribution
+requirements:
 
 - Mermaid: the tool writes an HTML comment with the version, the copyright line
   and the full MIT permission notice immediately before the library, in both

@@ -27,6 +27,7 @@ class RenderContext:
     image_base: Path            # directory image src paths are relative to
     html_dir: Path | None       # output directory (None = measurement, use absolute file paths)
     embed_images: bool = False
+    svgs: dict[str, str] | None = None  # prerendered Mermaid SVG per block id (from the verify pass)
 
 
 def _esc(s: str) -> str:
@@ -108,7 +109,10 @@ def _render_figure(block: dict[str, Any], ctx: RenderContext, mode: str, attr: s
     data = (f' data-figure-w="{W:.2f}" data-figure-h="{H:.2f}" data-figure-r="{r}"'
             f' data-image-scale="{ctx.layout.image_scale}"')
     if block["type"] == "mermaid":
-        body = f'<pre class="mermaid">{_esc(block["source"])}</pre>'
+        svg = (ctx.svgs or {}).get(block.get("id", ""))
+        # prerendered: the SVG the verify pass captured replaces the source; the source itself
+        # stays in the envelope, so `build` can always draw it again
+        body = svg if svg else f'<pre class="mermaid">{_esc(block["source"])}</pre>'
         caption = ""
     else:
         src = _image_src(block["src"], ctx)
@@ -267,7 +271,9 @@ def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, out_dir: Path | None)
     document: always embed the library."""
     parts = []
     if needs_mermaid:
-        lib_mode = ctx.layout.mermaid_lib if out_dir is not None else "embed"
+        # `prerender` still needs the library while the verify pass draws the SVGs; the final
+        # document (needs_mermaid False once every diagram is prerendered) omits it
+        lib_mode = "embed" if out_dir is None or ctx.layout.mermaid_lib == "prerender" else ctx.layout.mermaid_lib
         parts.append(assets.mermaid_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
     parts.append("<script>\n" + assets.figures_js() + "\n</script>")
     return parts
@@ -282,17 +288,20 @@ def effective_layout(layout) -> dict[str, Any]:
     return out
 
 
-def _needs(blocks: list[dict[str, Any]]) -> tuple[bool, bool]:
+def _needs(blocks: list[dict[str, Any]], svgs: dict[str, str] | None = None) -> tuple[bool, bool]:
+    """(needs the Mermaid library, needs Font Awesome). Diagrams that already have a
+    prerendered SVG do not need the library; fa: icons inside them still need the font."""
     mermaid = [b for b in blocks if b["type"] == "mermaid"]
     needs_fa = any("fa:" in b["source"] for b in mermaid)
-    return bool(mermaid), needs_fa
+    pending = [b for b in mermaid if not (svgs and b.get("id") in svgs)]
+    return bool(pending), needs_fa
 
 
 def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: RenderContext,
                     date_text: str | None) -> str:
     title = doc["meta"]["title"]
     all_blocks = [b for p in pages for b in p["blocks"]]
-    needs_mermaid, needs_fa = _needs(all_blocks)
+    needs_mermaid, needs_fa = _needs(all_blocks, ctx.svgs)
     # The file is a Gospelo Document: the envelope (original Markdown as pages[0],
     # the pages the HTML is rendered from, the effective layout) is the first thing
     # in <head>, so `build out.gospelo.html` can regenerate the file from itself.

@@ -45,7 +45,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 <section class="page" data-page-id="p01">...</section>
 ...
 <!-- Mermaid <version> | MIT License | ... -->
-<script>...mermaid.min.js (Mermaid ブロックがある場合)...</script>
+<script>...mermaid.min.js (layout.mermaidLib が embed のときだけ。prerender はページに SVG を書く)...</script>
 <script>...figures.js...</script>
 <script>...ページ番号...</script>
 </body>
@@ -134,7 +134,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 ## 8. 資産
 
 - 画像は `src` でファイルからの相対パスを参照するか、`layout.embedImages` が真なら `data:` URI で埋め込む。
-- Mermaid ライブラリは `layout.mermaidLib` が `embed` (既定) で、文書に `mermaid` ブロックが 1 つ以上あるときに埋め込む。`link` ではファイルの隣の `mermaid-<version>.min.js` を参照する (`LICENSE.mermaid-<version>.txt` を併置)。使った版は `layout.mermaidVersion` に記録し、再生成のたびに同じ版を使う。Mermaid 図はソースのまま保持し、ブラウザで描画する。事前描画はしない。
+- Mermaid 図は常にソースとしてエンベロープに保持する。`layout.mermaidLib` が `prerender` (既定) なら、書き手は検証パスで各図を描き、その `<svg>` を描画済みの図の中に置く。ライブラリは同梱しない。`embed` では `<body>` 末尾にライブラリを埋め込みブラウザがソースを描く。`link` ではファイルの隣の `mermaid-<version>.min.js` を参照する (`LICENSE.mermaid-<version>.txt` を併置)。使った版はどのモードでも `layout.mermaidVersion` に記録し、再生成のたびに同じ版を使う。
 - フォントは埋め込まない。例外は Mermaid ソースの `fa:` アイコンに必要な Font Awesome のサブセット。
 
 ## 9. 本形式より前に書かれたファイル

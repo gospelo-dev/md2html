@@ -189,9 +189,24 @@ _VERIFY_JS = r"""
 """
 
 
-def verify_document(browser: Browser, html_path: Path) -> list[dict[str, Any]]:
+_SVGS_JS = r"""
+() => {
+  const out = {};
+  for (const fig of document.querySelectorAll('figure.figure[data-type="mermaid"]')) {
+    const svg = fig.querySelector('svg');
+    if (svg) { out[fig.dataset.block] = svg.outerHTML; }
+  }
+  return out;
+}
+"""
+
+
+def verify_document(browser: Browser, html_path: Path) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Per-page overflow report, plus the SVG markup Mermaid produced for each
+    mermaid block (block id -> <svg ...>, already sized by figures.js). The SVGs
+    let `prerender` mode write the final document without the Mermaid library."""
     page = browser.open(html_path)
     try:
-        return page.evaluate(_VERIFY_JS)
+        return page.evaluate(_VERIFY_JS), page.evaluate(_SVGS_JS)
     finally:
         page.close()

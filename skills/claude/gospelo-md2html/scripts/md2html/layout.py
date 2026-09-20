@@ -49,7 +49,7 @@ class Layout:
     figure_side: str = "right"
     split_ratio: float = 0.5
     details: str = "drop"
-    mermaid_lib: str = "embed"
+    mermaid_lib: str = "prerender"       # prerender (SVG in the document, no library) | embed | link
     mermaid_version: str | None = None   # None = newest vendored; generated HTML records the effective one
     hr_break: bool = False
     image_scale: float = 1.0
@@ -158,8 +158,8 @@ def _check(layout: Layout) -> None:
         raise LayoutError(f"invalid header title mode {layout.header_title!r}")
     if layout.details not in ("drop", "expand"):
         raise LayoutError(f"invalid details mode {layout.details!r}")
-    if layout.mermaid_lib not in ("embed", "link"):
-        raise LayoutError(f"invalid mermaid lib mode {layout.mermaid_lib!r}")
+    if layout.mermaid_lib not in ("prerender", "embed", "link"):
+        raise LayoutError(f"invalid mermaid lib mode {layout.mermaid_lib!r}: expected prerender, embed or link")
     if layout.mermaid_version is not None and not re.match(r"^\d+\.\d+\.\d+$", layout.mermaid_version):
         raise LayoutError(f"invalid mermaid version {layout.mermaid_version!r}: expected MAJOR.MINOR.PATCH")
     if layout.image_scale <= 0:

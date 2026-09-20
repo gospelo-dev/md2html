@@ -14,7 +14,7 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 2. **AI で編集できる。** 出力は `.gospelo.html` 1 ファイル (**Gospelo Document**) で、その先頭に内容が JSON として置かれます: 1 ページ 1 オブジェクト、本文はインライン Markdown、表は `header` + `rows`、Mermaid はソース文字列。エージェントは該当ページを直して同じファイルに `build` するだけです。収まらなくなった分は同じタイトルの続きページへ自動で送られ、JSON と描画済みページは常に一致します。
 3. **原文を保持する。** 取り込み時点の Markdown をファイルの中にそのまま保持し、`restore` でいつでも取り出せます。編集をやり直したいときは原文から `import` し直せます。
 
-レイアウトはコンテンツに含めません。用紙、余白、文字階層、段の分割、図の側は CLI オプションか別のレイアウト JSON で与えます。Mermaid は HTML に同梱した Mermaid.js がブラウザで描画するので、最終ファイルまで図が編集可能なままです。
+レイアウトはコンテンツに含めません。用紙、余白、文字階層、段の分割、図の側は CLI オプションか別のレイアウト JSON で与えます。Mermaid 図はビルド時に描画して SVG としてファイルに書き込み、ソースはエンベロープに残すので、図は編集可能なままでファイルは小さく保てます (3MB のライブラリを同梱しません)。
 
 はじめての方は [クイックスタート](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md) ([English](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md)) を参照してください。組版の規則とその根拠は [docs/DESIGN_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/DESIGN_ja.md)、1 ファイル構成の設計は [docs/ARCHITECTURE_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/ARCHITECTURE_ja.md)、ファイル形式は [docs/spec/gospelo-document_ja.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document_ja.md) にあります。
 
@@ -130,7 +130,7 @@ uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/hando
 | `--figure-side` | `right` | `split` で図を置く側 |
 | `--split-ratio` | `0.5` | `split` のテキスト段の比率 (0.4 〜 0.6) |
 | `--details` | `drop` | `<details>` の扱い。中身が Mermaid ソースなら常に救出する |
-| `--mermaid-lib` | `embed` | Mermaid.js を HTML に埋め込む (単一ファイル、約 3MB) か、隣の `mermaid-<version>.min.js` として `link` する |
+| `--mermaid-lib` | `prerender` | `prerender`: 図を SVG として書き込み、ライブラリを同梱しない (図 5 枚のスライドで約 0.3 〜 0.5MB)。`embed`: Mermaid.js を埋め込みブラウザで描画する (約 3MB)。`link`: 隣の `mermaid-<version>.min.js` を参照する |
 | `--mermaid-version` | 同梱の最新版 | 描画に使う同梱 Mermaid の版 (`X.Y.Z`)。生成 HTML はページ割りに使った版を記録し、再生成時も同じ版を使う。版の追加方法は `THIRD_PARTY_NOTICES.md` を参照 |
 | `--hr-break` | off | スライド形式で `---` を改ページとして扱う |
 | `--embed-images` | off | 画像を data URI で埋め込む |

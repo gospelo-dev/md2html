@@ -64,7 +64,9 @@ def _add_layout_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--figure-side", dest="figure_side", choices=["left", "right"])
     g.add_argument("--split-ratio", dest="split_ratio", type=float)
     g.add_argument("--details", choices=["drop", "expand"])
-    g.add_argument("--mermaid-lib", dest="mermaid_lib", choices=["embed", "link"])
+    g.add_argument("--mermaid-lib", dest="mermaid_lib", choices=["prerender", "embed", "link"],
+                   help="prerender = write the diagrams as SVG and omit the library (default, small file); "
+                        "embed = inline mermaid.min.js (about 3MB); link = mermaid-<version>.min.js next to the output")
     g.add_argument("--mermaid-version", dest="mermaid_version", metavar="X.Y.Z",
                    help="vendored Mermaid version to render with (default: the version recorded in an "
                         "input HTML, else the newest vendored)")
@@ -200,12 +202,16 @@ def verify_and_fix(browser: Browser, doc: dict[str, Any], pages: list[dict[str, 
         keep = os.environ.get("MD2HTML_KEEP_TEMP") == "1"
         try:
             path.write_text(html_text, encoding="utf-8")
-            verify = verify_document(browser, path)
+            verify, svgs = verify_document(browser, path)
         finally:
             if not keep:
                 path.unlink(missing_ok=True)
         overflowing = [v for v in verify if v["overflowPx"] > 0 and v["mode"] != "cover"]
         if not overflowing:
+            if ctx.layout.mermaid_lib == "prerender" and svgs:
+                # write the diagrams the verify pass drew instead of the Mermaid library
+                ctx.svgs = svgs
+                html_text = render_document(doc, pages, ctx, date)
             return html_text, verify, rounds, pages
         rounds += 1
         if verbose:

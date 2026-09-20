@@ -11,7 +11,7 @@ The format itself (envelope object, container rules, conformance) is specified i
 | Distribute one file | No sidecar JSON, no external Mermaid library, no external scripts. Only images referenced by path stay external unless embedded. |
 | Editable without the tool | The content that determines every page is plain JSON inside the file, placed where an editor or an agent finds it first. |
 | Rebuildable from the file alone | `build out.gospelo.html` regenerates the rendered pages from the embedded envelope. The original Markdown is kept inside for `restore`. |
-| Cheap to read | The tool reads only the head of the file to get the envelope. The multi-megabyte Mermaid library at the end is never parsed by Python. |
+| Cheap to read | The tool reads only the head of the file to get the envelope. Whatever follows (rendered pages, and in `embed` mode the multi-megabyte Mermaid library) is never parsed by Python. |
 | Reviewable diffs | The envelope is pretty-printed and the rendered pages carry one block per line, so a change to one paragraph shows as a few changed lines in version control. |
 
 ## 2. File layout
@@ -36,7 +36,7 @@ flowchart TB
     end
     subgraph Tail["3. tail (large, static)"]
         direction TB
-        MJ["MIT notice + mermaid.min.js (about 3 MB, vendored version)"]
+        MJ["mermaid.min.js + MIT notice (about 3 MB)<br/>embed / link mode only: prerender (default) writes SVG instead"]
         F["figures.js: image and Mermaid sizing"]
         N["page numbering script"]
         MJ --> F --> N
@@ -55,7 +55,8 @@ flowchart TB
 | Signature | `<!-- gospelo-document 1 -->` on line 2 and `data-gospelo-document="1"` on `<html>`, so the format is recognisable from the first bytes regardless of the extension. |
 | One envelope block, first in `<head>` | Before every `<style>` and every other `<script>`. In a 3.1 MB deck the envelope starts at byte 282 and ends around 37 KB, inside the first 64 KB chunk the reader fetches. |
 | Original Markdown inside the envelope | `pages[0]` with `kind: "source"`. There is no separate Markdown block; the data is held once. |
-| Mermaid library at the end of `<body>` | Preceded by the MIT notice comment. Mermaid initializes after DOM construction, so the position does not change rendering. `figures.js` follows it, then the page-number script. |
+| Diagrams as SVG (default `prerender`) | The verify pass draws every Mermaid block in Chromium and the final file carries the resulting SVG inside each figure; no library is shipped. The source stays in the envelope, so `build` redraws it. |
+| Mermaid library at the end of `<body>` (`embed` / `link`) | Preceded by the MIT notice comment. Mermaid initializes after DOM construction, so the position does not change rendering. `figures.js` follows it, then the page-number script. |
 | Rendered pages regenerated on every build | The DOM is derived data. Editing it directly is not supported. |
 
 ### 2.1 Escaping rules
@@ -126,7 +127,7 @@ flowchart TB
     style Out fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
 ```
 
-`import` runs the settle-and-verify pass too, so the file it writes is exactly what `build` would produce from it: a later `build` moves nothing. Mermaid diagrams are never pre-rendered. The source text stays in the envelope and the vendored Mermaid.js draws it in the browser, so the diagram remains editable in the final file. The envelope records the Mermaid version used (`layout.mermaidVersion`), and every rebuild uses that version, because figure sizes and therefore pagination depend on it.
+`import` runs the settle-and-verify pass too, so the file it writes is exactly what `build` would produce from it: a later `build` moves nothing. Mermaid diagrams are drawn by the vendored Mermaid.js in Chromium during the verify pass; in the default `prerender` mode the resulting SVG is written into the file and the library is left out, while the source text stays in the envelope so the diagram remains editable (edit the source, run `build`). `embed` and `link` keep the source in the page and let the browser draw it. The envelope records the Mermaid version used (`layout.mermaidVersion`), and every rebuild uses that version, because figure sizes and therefore pagination depend on it.
 
 ## 4. Reading the head only
 
@@ -191,9 +192,9 @@ Rules that keep the loop predictable:
 
 | Topic | Trade-off | Position |
 | --- | --- | --- |
-| File size | Embedding Mermaid.js adds about 3 MB per file. | Accepted for single-file distribution. `--mermaid-lib link` remains for cases where many files share one library (`mermaid-<version>.min.js` next to the file). The library is omitted when the document has no Mermaid block. |
+| File size | Embedding Mermaid.js would add about 3 MB per file. | Default `prerender` writes the diagrams as SVG and ships no library (a 15-page deck with five diagrams is about 0.45 MB, most of it the Font Awesome font when `fa:` icons are used). `embed` (browser-side drawing, about 3 MB) and `link` (shared `mermaid-<version>.min.js` next to the file) remain as options. |
 | Multiple page formats | One file holds one layout. Producing A4 and 16:9 from the same content means two files. | Accepted. Rebuild with `build --page a4 --reflow` from either file; the envelope content is the same. |
-| Viewers without JavaScript | GitHub preview and some viewers do not run scripts: Mermaid stays as source, page numbers are static. | Accepted. Distribute the HTML for browsers, or the PDF. |
+| Viewers without JavaScript | Some viewers do not run scripts: page numbers stay at their static values, and in `embed` / `link` mode Mermaid stays as source. | Accepted. With the default `prerender` the diagrams are plain SVG and display without scripts. |
 | Images | Path-referenced images stay external by default. | Use `embedImages` when the file must be fully self-contained. |
 | Sidecar JSON | Useful for editing outside the HTML and for small diffs. | Optional output only (`.gospelo.json`, the same envelope). Not part of the distributed artifact. |
 | Earlier formats | Reading them would keep two code paths alive. | Not read. Migration is re-import from the Markdown, which every earlier file still contains (`docs/MIGRATION.md`). |

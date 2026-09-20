@@ -16,8 +16,9 @@ description: >
 
 Markdown を取り込み、ページ割り済みの **Gospelo Document** (`<name>.gospelo.html`) を書く。
 編集対象はその HTML の先頭にあるエンベロープ JSON (`<script id="gospelo-document">`) だけで、
-`check` / `build` はその HTML を入力にして同じファイルを再生成する。Mermaid は HTML に同梱した
-Mermaid.js がブラウザで描画する。ページ割りは Playwright (Chromium) で実測する。
+`check` / `build` はその HTML を入力にして同じファイルを再生成する。Mermaid 図はビルド時に
+Chromium で描いて SVG として書き込む (既定の `--mermaid-lib prerender`。ソースはエンベロープに残る)。
+ページ割りは Playwright (Chromium) で実測する。
 
 レイアウトの要約は `references/` にある。設計の根拠 (判断事項、ページ割りアルゴリズムの詳細)
 はリポジトリ `gospelo-dev/md2html` のメンテナ用 `development/docs/` にあり、スキル本体には含めない。

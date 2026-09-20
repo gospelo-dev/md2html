@@ -14,7 +14,7 @@ Most Markdown-to-PDF tools flow text into a browser's print engine and hope for 
 2. **Editable by an AI.** The output is one `.gospelo.html` (a **Gospelo Document**) whose content sits at the top of the file as JSON: one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source. An agent edits the page in question and runs `build` on that same file. Anything that no longer fits is spilled to a continuation page with the same title, and the JSON always matches the rendered pages.
 3. **The original is preserved.** The Markdown as imported is kept verbatim inside the file; `restore` gets it back at any time, and a fresh `import` from it undoes every edit.
 
-Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid is rendered in the browser by an embedded Mermaid.js, so diagrams stay editable all the way to the final file.
+Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid diagrams are drawn during the build and written into the file as SVG, while their source stays in the envelope, so they remain editable and the file stays small (no 3 MB library inside).
 
 New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md) ([日本語](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md)). The typographic rules and their sources are in [docs/DESIGN.md](https://github.com/gospelo-dev/md2html/blob/main/docs/DESIGN.md), the single-file design in [docs/ARCHITECTURE.md](https://github.com/gospelo-dev/md2html/blob/main/docs/ARCHITECTURE.md), and the file format in [docs/spec/gospelo-document.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document.md).
 
@@ -131,7 +131,7 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--figure-side` | `right` | Figure column side in `split` layout |
 | `--split-ratio` | `0.5` | Text column fraction in `split` layout (0.4 to 0.6) |
 | `--details` | `drop` | `<details>` handling; Mermaid sources inside folds are always rescued |
-| `--mermaid-lib` | `embed` | `embed` Mermaid.js into the HTML (single file, about 3MB) or `link` it as a sibling `mermaid-<version>.min.js` |
+| `--mermaid-lib` | `prerender` | `prerender`: diagrams are written as SVG and no library is shipped (a deck with five diagrams is about 0.3 to 0.5 MB); `embed`: inline Mermaid.js so the browser draws the diagrams (about 3 MB); `link`: reference a sibling `mermaid-<version>.min.js` |
 | `--mermaid-version` | newest vendored | Vendored Mermaid version to render with (`X.Y.Z`). A generated HTML records the version it was paginated with and is rebuilt with that same version; see `THIRD_PARTY_NOTICES.md` for adding versions |
 | `--hr-break` | off | Treat `---` as a page break in slide formats |
 | `--embed-images` | off | Inline images as data URIs |

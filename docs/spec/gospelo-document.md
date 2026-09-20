@@ -45,7 +45,7 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 <section class="page" data-page-id="p01">...</section>
 ...
 <!-- Mermaid <version> | MIT License | ... -->
-<script>...mermaid.min.js (when the document has Mermaid blocks)...</script>
+<script>...mermaid.min.js (only when layout.mermaidLib is embed; prerender writes SVG into the pages)...</script>
 <script>...figures.js...</script>
 <script>...page numbering...</script>
 </body>
@@ -134,7 +134,7 @@ A conforming writer:
 ## 8. Assets
 
 - Images are referenced by `src` as a path relative to the file, or embedded as a `data:` URI when `layout.embedImages` is true.
-- The Mermaid library is embedded when `layout.mermaidLib` is `embed` (default) and the document has at least one `mermaid` block; with `link` a `mermaid-<version>.min.js` next to the file is referenced (with its `LICENSE.mermaid-<version>.txt`). The version used is recorded in `layout.mermaidVersion` and reused on every rebuild. Mermaid diagrams are stored as source and drawn in the browser; they are never pre-rendered.
+- Mermaid diagrams are always stored as source in the envelope. With `layout.mermaidLib` `prerender` (default) the writer draws each diagram during its verify pass and places the resulting `<svg>` inside the rendered figure; no library is shipped. With `embed` the library is inlined at the end of `<body>` and the browser draws the source; with `link` a `mermaid-<version>.min.js` next to the file is referenced (with its `LICENSE.mermaid-<version>.txt`). The version used is recorded in `layout.mermaidVersion` and reused on every rebuild, in every mode.
 - Fonts are not embedded except the Font Awesome subset needed by `fa:` icons in Mermaid sources.
 
 ## 9. Files written before this format

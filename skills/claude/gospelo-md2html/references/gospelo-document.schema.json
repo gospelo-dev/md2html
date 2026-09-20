@@ -52,7 +52,7 @@
         "figureSide": { "enum": ["left", "right"] },
         "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
         "details": { "enum": ["drop", "expand"] },
-        "mermaidLib": { "enum": ["embed", "link"] },
+        "mermaidLib": { "enum": ["prerender", "embed", "link"], "description": "prerender (default): diagrams written as SVG, no library in the file; embed: mermaid.min.js inlined; link: mermaid-<version>.min.js next to the file" },
         "mermaidVersion": { "type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Mermaid version the document was paginated with. Writers MUST record it; readers rebuild with the same version" },
         "hrBreak": { "type": "boolean" },
         "imageScale": { "type": "number", "exclusiveMinimum": 0 },

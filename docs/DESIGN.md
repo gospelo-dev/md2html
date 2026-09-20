@@ -193,7 +193,7 @@ Two cases cannot be split. A table whose single row is taller than the page (a h
 - **Golden-ratio and canon-based page construction.** Designed around the diagonals and binding margin of a two-page spread [B12]; it does not fit single-sided PDFs and slides.
 - **Strict snapping to a baseline grid.** A grid must be divided by whole empty lines [B7], and tables and Mermaid diagrams do not land on it. With measured heights, keeping spacing close to multiples of the line height is enough.
 - **Z-order two columns.** The eye would jump left and right mid-paragraph; columns in horizontal writing read left to right [W6].
-- **Pre-rendering diagrams to SVG.** The Mermaid source stays in the HTML and is drawn in the browser, so diagrams remain editable in the final file.
+- **Shipping the Mermaid library in every file.** Diagrams are drawn during the build and written as SVG; the source stays in the envelope, so they remain editable (edit, then `build`) without a 3 MB library in each file. `--mermaid-lib embed` keeps browser-side drawing as an option.
 
 ## 9. Where the numbers live
 

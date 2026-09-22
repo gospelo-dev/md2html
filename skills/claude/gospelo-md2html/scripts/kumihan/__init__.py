@@ -15,10 +15,16 @@ from __future__ import annotations
 
 from .errors import DecisionMismatch, FitError, FontError, KumihanError, LintError
 from .font import Axis, Bounds, FontFace, VerticalMetrics
+from .decision import Decision
+from .fit import Fit, FitResult
 from .kinsoku import Kinsoku, feasible
+from .linebreak import BreakCandidate, BreakResult
 from .normalize import Normalized, normalize
+from .place import PlacedGlyph, PlacedLine, Placement
 from .segment import BudouXSegmenter, EveryCharSegmenter, NoBreakSegmenter, Segmenter, candidate_breaks
 from .shape import Shaped, ShapedGlyph, shape, split_runs
+from .space import SpacingRules, Spaced, SpacedGlyph
+from .typesetter import Layout, Typesetter
 
 # Recorded in every Decision as engine "kumihan/<version>". Bump when rules,
 # rounding or output formatting change so cached decisions are redone.

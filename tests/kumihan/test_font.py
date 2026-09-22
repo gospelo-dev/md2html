@@ -29,12 +29,16 @@ def test_package_exposes_version_and_errors():
 
 
 def test_engine_does_not_import_md2html():
-    # other test modules import md2html at collection time, so inspect the sources
     package = Path(kumihan.__file__).parent
     for src in package.rglob("*.py"):
+        depth = len(src.relative_to(package).parts) - 1
         for line in src.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
-            assert not re.match(r"(from|import)\s+(md2html|\.\.)", stripped), f"{src.name}: {stripped}"
+            assert not re.match(r"(from|import)\s+md2html\b", stripped), f"{src.name}: {stripped}"
+            m = re.match(r"from\s+(\.+)", stripped)
+            if m:
+                dots = len(m.group(1))
+                assert dots <= depth + 1, f"{src.name} escapes package: {stripped}"
 
 
 def test_load_identity_and_metrics(bold_face: FontFace):

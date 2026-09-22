@@ -14,6 +14,10 @@ BIZUD_REGULAR = FONT_DIR / "BIZUDPGothic-Regular.woff2"
 sys.path.insert(0, str(SCRIPTS))
 
 
+def pytest_addoption(parser):
+    parser.addoption("--update-golden", action="store_true", default=False)
+
+
 @pytest.fixture(scope="session")
 def bold_face():
     from kumihan import FontFace

@@ -25,7 +25,9 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 | 用紙 | `a4`、`a4-landscape`、`a3`、`a3-landscape` (文書) と `16x9`、`4x3` (スライド) |
 | 文字サイズ 1 つで組版 | 見出し、表、コード、余白、フッターの大きさは全て `--font-size` から導出 |
 | スライド | h2 ごとに 1 枚。見出しはヘッダー帯に本文の 1.25 倍で表示し、続きスライドに「(続き)」を付ける |
-| 2 段組 | 横長の用紙ではブロックを 2 段組 (左段 → 右段) で流す: 左段の上から下へ、次に右段へ。列数の多い表、コード、横長の図は幅いっぱいの帯になる。縦長の用紙は単段。図 1 枚をテキストの隣に置く `split` も選べる |
+| 2 段組 | 横長の用紙ではブロックを 2 段組 (左段 → 右段) で流す: 左段の上から下へ、次に右段へ。列数の多い表と横長の図は幅いっぱいの帯になる。縦長の用紙は単段。図 1 枚をテキストの隣に置く `split` も選べる |
+| コードブロック | コードフェンスに言語名があれば Shiki でシンタックスハイライトする (JSON、bash、YAML、Python、JS/TS、HTML、CSS、SQL、TOML、Markdown、diff、Dockerfile)。色は静的なマークアップとしてファイルに書き込み、ハイライタ本体は同梱しない。2 段組ではコードを 1 段に収めて本文の 0.6 倍、それ以外は 0.85 倍で組む |
+| 縦長の図 | 縮めると読めないほど縦長の Mermaid フローチャートは、ノードの間で切り分けて 1 つの SVG の中で 2 〜 4 段に並べる |
 | 実測 | 高さは Chromium (Playwright) で実測し、推定しない。検証パスが全ページのはみ出しを確認する |
 | 編集可能なコンテンツ | ページ単位の JSON。表の行、リスト項目、Mermaid ソースは素のデータ |
 | 自動送り | 編集で収まらなくなった分は「(続き)」ページへ移す。内容を削ったり押し込んだりしない |
@@ -207,7 +209,7 @@ zip -r gospelo-md2html.zip gospelo-md2html -x "*__pycache__*" -x "*.DS_Store"
 
 - 高さは計測パスで得ます。全ブロックを非表示の連続領域にテキスト段の幅 (横長用紙では単段幅でも) で描画し、Chromium からブロック、表の行、リスト項目、行の高さを取ります。
 - ページはコンテンツ高さの 98% まで貪欲に詰めます。見出しは直後の数行 (図なら図全体) の分を確保し、ページ末尾に残りません。表は行境界で分割してヘッダーを繰り返し、3 行未満の断片は作りません。コードは 16 行以上のときだけ分割し、段落は実測した行境界で分割して両側のインライン Markdown を再構成します。
-- 横長の用紙は 2 段組 (左段 → 右段。左段を上から下へ、次に右段) で、列数 4 以上の表、コード、横長の図は幅いっぱいの帯になります。左段に入らない図は、空いている右段の先頭に浮動します。
+- 横長の用紙は 2 段組 (左段 → 右段。左段を上から下へ、次に右段) で、列数 4 以上の表と横長の図は幅いっぱいの帯になります。左段に入らない図は、空いている右段の先頭に浮動します。帯の直前では左右の段の下端が揃うように、ブロック単位で配り直します。ページやセクションの末尾では揃えず、左段から上詰めで埋めます。
 - 検証パスが最終 HTML を開いて各ページを測り直し、はみ出しがあれば送ります。`build` は編集者が決めたページ境界を保ち、内容を前に詰め直すことはせず、続きページへ送るだけです。
 
 これらの規則の根拠となる設計文書 (用紙、レイアウトロジック、コンテンツモデル、判断事項) はメンテナの作業ディレクトリにあり、要約をスキルの `references/` に置いています。
@@ -224,11 +226,12 @@ md2html/
 │   │       │   ├── md2html.py           # CLI (PEP 723 メタデータ。uv で実行)
 │   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, layout,
 │   │       │   │                        # fonts (サブセット埋め込み), pptx_export, assets, scale, formats, report
+│   │       │   ├── kumihan/             # h1 見出し用の組版エンジン (開発中。md2html からはまだ使っていない)
 │   │       │   ├── extract_markdown.py  # 移行用: ツールが書いたどのファイルからも Markdown を取り出す
 │   │       │   └── install.py           # 探索パスへのインストーラ
 │   │       └── references/
 │   │           ├── base.css             # ページ枠と組版 (CSS 変数)
-│   │           ├── figures.js           # ブラウザ側の Mermaid 描画と図のサイズ決定
+│   │           ├── figures.js           # ブラウザ側: Mermaid の描画と段組み、Shiki、図のサイズ決定
 │   │           ├── gospelo-document.schema.json  # エンベロープのスキーマ (ファイル形式)
 │   │           ├── layout.schema.json   # レイアウト JSON スキーマ (--layout に渡すファイル)
 │   │           ├── page_formats.md      # 用紙、余白、既定値
@@ -238,14 +241,25 @@ md2html/
 │   │           └── vendor/              # Mermaid.js (版別)、Shiki、Font Awesome Free、BIZ UD フォント (THIRD_PARTY_NOTICES.md 参照)
 │   └── opencode/README.md               # OpenCode から同じスキルを使う方法
 ├── tests/                               # pytest: ページ割りと 2 段組、インライン分割、エンベロープ入出力、移行、
-│                                        # Mermaid 同梱と prerender、PPTX 出力、フォント
+│                                        # Mermaid 同梱と prerender、PPTX 出力、フォント、kumihan (ゴールデン SVG)
+├── .github/workflows/ci.yml             # CI: pytest と、tests/fixtures を Chromium で取り込むスモークテスト
 ├── docs/                                # QUICKSTART、DESIGN、ARCHITECTURE、MIGRATION (英日)、spec/gospelo-document
 ├── assets/                              # README のヒーロー画像。design/ に DESIGN の図とそれを描くスクリプト
 ├── THIRD_PARTY_NOTICES.md               # 同梱資産と実行時依存のライセンス
 └── LICENSE
 ```
 
-テストは `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx --with fonttools --with brotli pytest -q tests` で実行します。
+テストは CI と同じく次のコマンドで実行します。
+
+```bash
+uv run --python 3.13.1 \
+  --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright \
+  --with python-pptx --with pillow --with brotli \
+  --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py \
+  pytest -q tests
+```
+
+kumihan のゴールデン SVG には生成時の Python とライブラリの版が記録されるため、これらの版を固定しています。どれかを上げたときは `pytest tests/kumihan --update-golden` でゴールデンを作り直してください。
 
 ## ライセンス
 

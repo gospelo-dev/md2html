@@ -13,7 +13,7 @@ flowchart LR
     F["body size F<br/>e.g. --font-size 14pt"]
     subgraph Type["type hierarchy"]
         H["headings 1.6F / 1.35F / 1.15F"]
-        T["tables 0.9F, code 0.85F"]
+        T["tables 0.9F, code 0.6F / 0.85F"]
         L["line height 1.6F (documents) / 1.5F (slides)"]
     end
     subgraph Space["spacing"]
@@ -49,7 +49,7 @@ flowchart LR
 | --- | --- | --- |
 | h1 / h2 / h3 / h4 | 1.6F / 1.35F / 1.15F / 1.0F bold | A restrained modular scale with steps of 1.15 to 1.2 [B1] [B2]. Headings grow by "the smallest increment that makes a visible difference" [B3]. At A4 11pt an h1 stays within 18pt |
 | Body line height | 1.6 (documents) / 1.5 (slides) | Japanese line gap is between half an em and one em, that is a line height of 1.5 to 2.0 [S2] [W6]. Also satisfies the WCAG minimum of 1.5 [W7]. Slides sit at the lower bound to fit more lines |
-| Tables / code | 0.9F (0.85F on slides) / 0.85F monospace | Dense elements one step smaller, distinct from body text. The same ratio as 10pt body with 9pt figure text in standards documents [G3] |
+| Tables / code | 0.9F (0.85F on slides) / monospace 0.6F in two-column layouts, 0.85F otherwise | Dense elements one step smaller, distinct from body text. The same ratio as 10pt body with 9pt figure text in standards documents [G3]. Code sits in one column of a two-column page, so it drops two steps and wraps long lines rather than taking a full-width band |
 | Slide title | 1.25F | The smallest difference that reads as "a little larger than the body" (17.5pt against 14pt). A major third in musical terms [B2] |
 
 ### Slides are set as documents to be read
@@ -108,6 +108,8 @@ Paper sizes follow ISO 216 [S1] and PowerPoint's Widescreen / 4:3 [V1]; millimet
 
 Reading order is column order (left column, then right): down the left column, then down the right (columns in horizontal writing run left to right [W6] [G7]). Traced on the page the path forms a mirrored N, the Cyrillic И. Alternating Z order is rejected because the eye would jump mid-paragraph. Elements that need the full width close the columns and become a band, after which the two columns resume. A figure that does not fit at the bottom of the left column floats to the top of an empty right column while the text keeps flowing on the left (block 4 above).
 
+**Columns are evened out only above a band.** Before a band, the region's whole blocks are redistributed so both columns end at about the same height, leaving no hole above the band; no block is split for this, and a heading is never left alone at the bottom of the left column. At the end of a page or section the columns are not balanced: the left column fills from the top and only what does not fit goes right, so a short section reads top-down instead of being spread thinly over both columns.
+
 | Paper | Column width | Gap | Characters per line |
 | --- | --- | --- | --- |
 | 16:9 (14pt) | 580px | 28px | 31 |
@@ -117,7 +119,7 @@ Reading order is column order (left column, then right): down the left column, t
 
 ## 5. Where a figure goes: the scale decides
 
-**A figure goes into a column or a band depending on where it renders larger.** The tool compares the scale factor needed to fit the column box (column width x column height) with the one for the band box (full width x 0.6 of the height) and picks the larger. There is no fixed aspect-ratio threshold.
+**A figure goes into a column or a band depending on where it renders larger.** The tool compares the scale at which the figure was measured in the column box (column width x column height) with its scale in the band box (full width x 0.6 of the height) and picks the larger. There is no fixed aspect-ratio threshold.
 
 ```mermaid
 flowchart TB
@@ -125,8 +127,8 @@ flowchart TB
     Q1 -->|1| C1["column"]
     Q1 -->|2| B1["band"]
     Q1 -->|none| Q2{"type"}
-    Q2 -->|table with 4+ columns<br/>code / html| B2["band"]
-    Q2 -->|paragraph / list<br/>table with up to 3 columns| C2["column"]
+    Q2 -->|table with 4+ columns<br/>html| B2["band"]
+    Q2 -->|paragraph / list / code<br/>table with up to 3 columns| C2["column"]
     Q2 -->|figure| Q3{"larger as<br/>a band"}
     Q3 -->|yes| B3["band"]
     Q3 -->|no| C3["column"]
@@ -144,6 +146,8 @@ flowchart TB
 > On 16:9 a figure wider than about 1.67 times its height becomes a band; on A4 landscape the break-even is about 1.17. The threshold follows from the paper size.
 
 The band height is capped at 0.6 so that a few lines of two-column text still fit below the figure (LaTeX's defaults are a 0.7 float cap and 0.2 minimum text [B10]). For a figure-only slide, raise `maxHeightRatio` in the layout `overrides`.
+
+**A tall flowchart is set in columns rather than shrunk.** When a Mermaid flowchart is at least twice as tall as it is wide and would be drawn below 0.9 of its size, it is cut through the free horizontal gaps between nodes and laid out as 2 to 4 side-by-side strips in one SVG, like newspaper columns. A split is taken only if it enlarges the diagram by at least 1.3 times and its text stays at 11px or more. The gap between strips is 2.5 times the diagram font size at any scale, and a split diagram may use up to 0.8 of the height.
 
 ## 6. Measure, do not estimate
 
@@ -198,6 +202,7 @@ Two cases cannot be split. A table whose single row is taller than the page (a h
 - **Strict snapping to a baseline grid.** A grid must be divided by whole empty lines [B7], and tables and Mermaid diagrams do not land on it. With measured heights, keeping spacing close to multiples of the line height is enough.
 - **Z-order two columns.** The eye would jump left and right mid-paragraph; columns in horizontal writing read left to right [W6].
 - **Shipping the Mermaid library in every file.** Diagrams are drawn during the build and written as SVG; the source stays in the envelope, so they remain editable (edit, then `build`) without a 3 MB library in each file. `--mermaid-lib embed` keeps browser-side drawing as an option.
+- **Shipping a syntax highlighter.** Code is colored by Shiki during the build and the colors are written into the page as static markup; the file never carries the highlighter.
 
 ## 9. Where the numbers live
 

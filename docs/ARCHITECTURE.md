@@ -37,7 +37,7 @@ flowchart TB
     subgraph Tail["3. tail (large, static)"]
         direction TB
         MJ["mermaid.min.js + MIT notice (about 3 MB)<br/>embed / link mode only: prerender (default) writes SVG instead"]
-        F["figures.js: image and Mermaid sizing"]
+        F["figures.js: image and Mermaid sizing,<br/>tall flowchart column split"]
         N["page numbering script"]
         MJ --> F --> N
     end
@@ -129,7 +129,7 @@ flowchart TB
     style Out fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
 ```
 
-`import` runs the settle-and-verify pass too, so the file it writes is exactly what `build` would produce from it: a later `build` moves nothing. Mermaid diagrams are drawn by the vendored Mermaid.js in Chromium during the verify pass; in the default `prerender` mode the resulting SVG is written into the file and the library is left out, while the source text stays in the envelope so the diagram remains editable (edit the source, run `build`). `embed` and `link` keep the source in the page and let the browser draw it. The envelope records the Mermaid version used (`layout.mermaidVersion`), and every rebuild uses that version, because figure sizes and therefore pagination depend on it.
+`import` runs the settle-and-verify pass too, so the file it writes is exactly what `build` would produce from it: a later `build` moves nothing. Mermaid diagrams are drawn by the vendored Mermaid.js in Chromium during the verify pass; in the default `prerender` mode the resulting SVG is written into the file and the library is left out, while the source text stays in the envelope so the diagram remains editable (edit the source, run `build`). `embed` and `link` keep the source in the page and let the browser draw it. The envelope records the Mermaid version used (`layout.mermaidVersion`), and every rebuild uses that version, because figure sizes and therefore pagination depend on it. Code blocks that name a language follow the same pattern: the vendored Shiki colors them in the measurement and verify passes, and the final file carries only the colored `<span>` markup, never the highlighter.
 
 ## 4. Reading the head only
 
@@ -209,6 +209,7 @@ Rules that keep the loop predictable:
 | Container rendering (head, pages, tail) | `scripts/md2html/render.py` |
 | Commands and default paths | `scripts/md2html.py` |
 | Per-version Mermaid vendoring and license notice | `scripts/md2html/assets.py`, `references/vendor/mermaid/<version>/` |
+| Shiki bundle (build-time only) and its build recipe | `scripts/md2html/assets.py`, `references/vendor/shiki/<version>/`, `references/vendor/shiki/build/` |
 | Envelope schema (ships with the skill) | `references/gospelo-document.schema.json` |
 | Format specification | `docs/spec/gospelo-document.md` |
 | Migration from earlier files | `docs/MIGRATION.md`, `scripts/extract_markdown.py` |

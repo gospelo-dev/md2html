@@ -37,7 +37,7 @@ flowchart TB
     subgraph Tail["3. 末尾 (大きい、静的)"]
         direction TB
         MJ["mermaid.min.js + MIT 表示 (約 3 MB)<br/>embed / link のときだけ。既定の prerender は SVG を書く"]
-        F["figures.js: 画像と Mermaid のサイズ決定"]
+        F["figures.js: 画像と Mermaid のサイズ決定、<br/>縦長フローチャートの段組み"]
         N["ページ番号の振り直しスクリプト"]
         MJ --> F --> N
     end
@@ -129,7 +129,7 @@ flowchart TB
     style Out fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
 ```
 
-`import` も確定と検証のパスを通すので、書き出すファイルは `build` がそこから作るものと同一で、後の `build` は何も動かさない。Mermaid 図は検証パスの中で同梱の Mermaid.js が Chromium 上で描く。既定の `prerender` ではその SVG をファイルに書き込みライブラリは同梱しないが、ソース文字列はエンベロープに残るので図は編集できる (ソースを直して `build`)。`embed` と `link` ではソースをページに置き、ブラウザが描く。エンベロープは使った Mermaid の版を記録し (`layout.mermaidVersion`)、再生成は必ずその版で行う。図の寸法、したがってページ割りが版に依存するためである。
+`import` も確定と検証のパスを通すので、書き出すファイルは `build` がそこから作るものと同一で、後の `build` は何も動かさない。Mermaid 図は検証パスの中で同梱の Mermaid.js が Chromium 上で描く。既定の `prerender` ではその SVG をファイルに書き込みライブラリは同梱しないが、ソース文字列はエンベロープに残るので図は編集できる (ソースを直して `build`)。`embed` と `link` ではソースをページに置き、ブラウザが描く。エンベロープは使った Mermaid の版を記録し (`layout.mermaidVersion`)、再生成は必ずその版で行う。図の寸法、したがってページ割りが版に依存するためである。言語名付きのコードブロックも同じ方式で、同梱の Shiki が計測パスと検証パスで色付けし、最終ファイルには色付けした `<span>` のマークアップだけが入る。ハイライタ本体は入らない。
 
 ## 4. 先頭だけを読む
 
@@ -209,6 +209,7 @@ sequenceDiagram
 | コンテナの描画 (先頭、ページ、末尾) | `scripts/md2html/render.py` |
 | コマンドと既定のパス | `scripts/md2html.py` |
 | 版別の Mermaid 同梱とライセンス表示 | `scripts/md2html/assets.py`、`references/vendor/mermaid/<version>/` |
+| Shiki のバンドル (ビルド時のみ使用) とそのビルド手順 | `scripts/md2html/assets.py`、`references/vendor/shiki/<version>/`、`references/vendor/shiki/build/` |
 | エンベロープのスキーマ (スキルに同梱) | `references/gospelo-document.schema.json` |
 | 形式の仕様 | `docs/spec/gospelo-document_ja.md` |
 | 以前のファイルからの移行 | `docs/MIGRATION_ja.md`、`scripts/extract_markdown.py` |

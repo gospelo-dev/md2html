@@ -25,7 +25,9 @@ New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/
 | Paper sizes | `a4`, `a4-landscape`, `a3`, `a3-landscape` (documents) and `16x9`, `4x3` (slides) |
 | One knob for typography | Everything (headings, tables, code, margins, footer size) derives from `--font-size` |
 | Slides | One slide per `h2`; the heading moves into a header band at 1.25x body size, continuation slides are marked |
-| Two columns | Landscape formats flow blocks in column order (down the left column, then the right); wide tables, code and wide figures become full-width bands. Portrait formats are single column. `split` (one figure beside the text) is also available |
+| Two columns | Landscape formats flow blocks in column order (down the left column, then the right); wide tables and wide figures become full-width bands. Portrait formats are single column. `split` (one figure beside the text) is also available |
+| Code blocks | Syntax-highlighted with Shiki when the fence names a language (JSON, bash, YAML, Python, JS/TS, HTML, CSS, SQL, TOML, Markdown, diff, Dockerfile). Colors are written into the file as static markup; no highlighter is shipped. In two-column layouts code sits in one column at 0.6x body size, otherwise 0.85x |
+| Tall diagrams | A tall Mermaid flowchart that would shrink to unreadable size is cut between nodes and laid out as 2 to 4 side-by-side columns inside one SVG |
 | Real measurement | Heights are measured in Chromium (Playwright), never estimated; a verify pass checks every page for overflow |
 | Editable content | Page-scoped JSON; table rows, list items and Mermaid source are plain data |
 | Auto spill | Content that stops fitting after an edit moves to a `(continued)` page; nothing is deleted or forced |
@@ -208,7 +210,7 @@ The recipient unzips it and runs `python gospelo-md2html/scripts/install.py --pr
 
 - Heights come from a measurement pass: every block is rendered in a hidden flow container at the text column width (and at full width for landscape formats), and Chromium reports block, row, item and line heights.
 - Pages are filled greedily to 98% of the content height. Headings reserve room for the following lines (or the whole figure) so they never end a page. Tables split at row boundaries with the header repeated and never leave fewer than three rows; code splits only above 15 lines; paragraphs split at measured line boundaries with the inline Markdown re-serialised on both sides.
-- Landscape formats use two columns in column order (down the left column, then the right); tables with four or more columns, code and wide figures become full-width bands, and a figure that does not fit the left column floats to the top of an empty right column.
+- Landscape formats use two columns in column order (down the left column, then the right); tables with four or more columns and wide figures become full-width bands, and a figure that does not fit the left column floats to the top of an empty right column. The columns above a band are balanced to end at the same height, moving whole blocks only; at the end of a page or section the left column simply fills first.
 - A verify pass opens the final HTML, measures each page again, and spills anything that still overflows. `build` keeps your page boundaries and only ever moves content forward into `(continued)` pages.
 
 The design documents behind these rules (page formats, layout logic, content model, decisions) live in the maintainers' working directory and are summarised in the skill's `references/`.
@@ -225,11 +227,12 @@ md2html/
 │   │       │   ├── md2html.py           # CLI (PEP 723 metadata; run with uv)
 │   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, layout,
 │   │       │   │                        # fonts (embedded subsets), pptx_export, assets, scale, formats, report
+│   │       │   ├── kumihan/             # Typesetting engine for h1 headings (work in progress; not used by md2html yet)
 │   │       │   ├── extract_markdown.py  # Migration: pull the Markdown out of any file the tool wrote
 │   │       │   └── install.py           # Installer for agent discovery paths
 │   │       └── references/
 │   │           ├── base.css             # Page frame and typography (CSS variables)
-│   │           ├── figures.js           # Browser-side Mermaid rendering and figure sizing
+│   │           ├── figures.js           # Browser side: Mermaid rendering and column split, Shiki, figure sizing
 │   │           ├── gospelo-document.schema.json  # Envelope schema (the file format)
 │   │           ├── layout.schema.json   # Layout JSON schema (--layout files)
 │   │           ├── page_formats.md      # Paper sizes, margins, defaults
@@ -239,14 +242,25 @@ md2html/
 │   │           └── vendor/              # Mermaid.js (per version), Shiki, Font Awesome Free, BIZ UD fonts (see THIRD_PARTY_NOTICES.md)
 │   └── opencode/README.md               # How OpenCode picks up the same skill
 ├── tests/                               # pytest: pagination and two columns, inline split, envelope I/O, migration,
-│                                        # Mermaid vendoring and prerender, PPTX export, fonts
+│                                        # Mermaid vendoring and prerender, PPTX export, fonts, kumihan (golden SVGs)
+├── .github/workflows/ci.yml             # CI: pytest, and a Chromium smoke test that imports tests/fixtures
 ├── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
 ├── assets/                              # README hero image; design/ holds the DESIGN figures and the script that draws them
 ├── THIRD_PARTY_NOTICES.md               # Licenses of the vendored assets and runtime dependencies
 └── LICENSE
 ```
 
-Run the tests with `uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with python-pptx --with fonttools --with brotli pytest -q tests`.
+Run the tests the way CI does:
+
+```bash
+uv run --python 3.13.1 \
+  --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright \
+  --with python-pptx --with pillow --with brotli \
+  --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py \
+  pytest -q tests
+```
+
+The kumihan golden SVGs record the Python and library versions they were generated with, so those versions are pinned; after upgrading one, regenerate the goldens with `pytest tests/kumihan --update-golden`.
 
 ## License
 

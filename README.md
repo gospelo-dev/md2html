@@ -1,6 +1,6 @@
 # gospelo-md2html
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-1E90FF.svg?style=flat)](https://github.com/gospelo-dev/md2html/blob/main/LICENSE) [![Python](https://img.shields.io/badge/Python-3.10+-1E90FF.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/) [![uv](https://img.shields.io/badge/run_with-uv-DE5FE9.svg?style=flat)](https://docs.astral.sh/uv/) [![Playwright](https://img.shields.io/badge/Playwright-Chromium-2EAD33.svg?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/python/) [![Mermaid](https://img.shields.io/badge/Mermaid-11-FF3670.svg?style=flat&logo=mermaid&logoColor=white)](https://mermaid.js.org/) [![Agent Skill](https://img.shields.io/badge/Agent_Skill-Claude_Code,_Copilot,_Codex,_OpenCode-7B3FF2.svg?style=flat)](https://docs.claude.com/en/docs/claude-code/skills)
+[![License: MIT](https://img.shields.io/badge/License-MIT-1E90FF.svg?style=flat)](./LICENSE) [![Python](https://img.shields.io/badge/Python-3.10+-1E90FF.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/) [![uv](https://img.shields.io/badge/run_with-uv-DE5FE9.svg?style=flat)](https://docs.astral.sh/uv/) [![Playwright](https://img.shields.io/badge/Playwright-Chromium-2EAD33.svg?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/python/) [![Mermaid](https://img.shields.io/badge/Mermaid-11-FF3670.svg?style=flat&logo=mermaid&logoColor=white)](https://mermaid.js.org/) [![Agent Skill](https://img.shields.io/badge/Agent_Skill-Claude_Code,_Copilot,_Codex,_OpenCode-7B3FF2.svg?style=flat)](https://docs.claude.com/en/docs/claude-code/skills)
 
 <p align="center"><img src="https://github.com/gospelo-dev/md2html/blob/main/assets/hero.jpg?raw=true" alt="gospelo-md2html: Markdown + Mermaid to paginated slides and documents, editable JSON, original kept" width="820"></p>
 
@@ -16,7 +16,7 @@ Most Markdown-to-PDF tools flow text into a browser's print engine and hope for 
 
 Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid diagrams are drawn during the build and written into the file as SVG, while their source stays in the envelope, so they remain editable and the file stays small (no 3 MB library inside).
 
-New here? See the [Quickstart](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART.md) ([日本語](https://github.com/gospelo-dev/md2html/blob/main/docs/QUICKSTART_ja.md)). The typographic rules and their sources are in [docs/DESIGN.md](https://github.com/gospelo-dev/md2html/blob/main/docs/DESIGN.md), the single-file design in [docs/ARCHITECTURE.md](https://github.com/gospelo-dev/md2html/blob/main/docs/ARCHITECTURE.md), and the file format in [docs/spec/gospelo-document.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document.md).
+New here? See the [Quickstart](./docs/QUICKSTART.md) ([日本語](./docs/QUICKSTART_ja.md)). The typographic rules and their sources are in [docs/DESIGN.md](./docs/DESIGN.md), the single-file design in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md), and the file format in [docs/spec/gospelo-document.md](./docs/spec/gospelo-document.md).
 
 ## What you get
 
@@ -102,7 +102,7 @@ The first `<script>` of a `.gospelo.html` (and the whole of a `.gospelo.json`) i
 }
 ```
 
-Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**bold**`, `` `code` ``, `[link](url)`). Block types: `heading`, `paragraph`, `list`, `table`, `code`, `image`, `mermaid`, `quote`, `html`, `pagebreak`. The envelope schema is [references/gospelo-document.schema.json](https://github.com/gospelo-dev/md2html/blob/main/skills/claude/gospelo-md2html/references/gospelo-document.schema.json); the format is specified in [docs/spec/gospelo-document.md](https://github.com/gospelo-dev/md2html/blob/main/docs/spec/gospelo-document.md). Files written before 0.2.0 are not read; see [docs/MIGRATION.md](https://github.com/gospelo-dev/md2html/blob/main/docs/MIGRATION.md).
+Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**bold**`, `` `code` ``, `[link](url)`). Block types: `heading`, `paragraph`, `list`, `table`, `code`, `image`, `mermaid`, `quote`, `html`, `pagebreak`. The envelope schema is [references/gospelo-document.schema.json](./skills/claude/gospelo-md2html/references/gospelo-document.schema.json); the format is specified in [docs/spec/gospelo-document.md](./docs/spec/gospelo-document.md). Files written before 0.2.0 are not read; see [docs/MIGRATION.md](./docs/MIGRATION.md).
 
 ### Layout JSON (optional)
 
@@ -193,9 +193,9 @@ python $INSTALL --project /path/to/repo --force
 
 Then, once per machine: `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup`.
 
-Agents discover the skill via [SKILL.md](https://github.com/gospelo-dev/md2html/blob/main/skills/claude/gospelo-md2html/SKILL.md) and trigger it when you say things like *"convert this Markdown to A4 PDF"*, *"make slides from this doc"*, or *"add a row to the table on page 5"*. SKILL.md tells the agent to dry-run first, edit only the JSON, check capacity before building, and screenshot the result before reporting.
+Agents discover the skill via [SKILL.md](./skills/claude/gospelo-md2html/SKILL.md) and trigger it when you say things like *"convert this Markdown to A4 PDF"*, *"make slides from this doc"*, or *"add a row to the table on page 5"*. SKILL.md tells the agent to dry-run first, edit only the JSON, check capacity before building, and screenshot the result before reporting.
 
-OpenCode needs no separate copy; see [skills/opencode/README.md](https://github.com/gospelo-dev/md2html/blob/main/skills/opencode/README.md).
+OpenCode needs no separate copy; see [skills/opencode/README.md](./skills/opencode/README.md).
 
 ### Distributing as a ZIP
 
@@ -264,4 +264,4 @@ The kumihan golden SVGs record the Python and library versions they were generat
 
 ## License
 
-[MIT](https://github.com/gospelo-dev/md2html/blob/main/LICENSE). Vendored assets: see [THIRD_PARTY_NOTICES.md](https://github.com/gospelo-dev/md2html/blob/main/THIRD_PARTY_NOTICES.md).
+[MIT](./LICENSE). Vendored assets: see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

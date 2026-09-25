@@ -36,6 +36,7 @@ class BlockHeight:
     scale: float | None = None
     intrinsic_w: float = 0.0
     intrinsic_h: float = 0.0
+    split: int = 1
 
     @property
     def outer(self) -> float:
@@ -48,6 +49,7 @@ class BlockHeight:
             line_height=e.get("lineHeight"), line_offsets=e.get("lineOffsets"), thead=e.get("thead"),
             rows=e.get("rows"), items=e.get("items"), lines=e.get("lines"), padding=float(e.get("padding", 0)),
             scale=e.get("scale"), intrinsic_w=float(e.get("intrinsicW", 0) or 0), intrinsic_h=float(e.get("intrinsicH", 0) or 0),
+            split=int(e.get("split", 1) or 1),
         )
 
 
@@ -533,8 +535,13 @@ def is_wide(block: dict[str, Any], ctx: PaginateContext, queue: deque | None = N
     if t in ("code", "html"):
         return True
     if t in FIGURE_TYPES:
-        # a figure becomes a band when the band box renders it larger than a column would
-        h = ctx.heights.get(block.get("id", ""))
+        bid = block.get("id", "")
+        h = ctx.heights.get(bid)
+        hs = ctx.heights_single.get(bid)
+        # measured scales account for column splitting done by figures.js
+        if h and hs and h.scale is not None and hs.scale is not None:
+            return hs.scale > h.scale
+        # fallback: compare fit from intrinsic dimensions
         if h and h.intrinsic_w > 0 and h.intrinsic_h > 0:
             if ctx.col_box is None or ctx.band_box is None:
                 raise ValueError("two-column pagination needs col_box and band_box to place figures")

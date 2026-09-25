@@ -6,7 +6,7 @@
 
 Turn Markdown + Mermaid into **layout-aware, paginated slide decks and documents** as **one self-contained HTML file**, with PDF and PPTX output as well. The HTML is a file that an **AI agent can edit and rebuild as it is**, and it **keeps the original Markdown inside**. The name says HTML; the HTML is the master document, and every other format is produced from it. This is not a plain Markdown-to-HTML converter.
 
-日本語版: [README_ja.md](https://github.com/gospelo-dev/md2html/blob/main/README_ja.md)
+日本語版: [README_ja.md](./README_ja.md)
 
 Most Markdown-to-PDF tools flow text into a browser's print engine and hope for the best: headings land at the bottom of a page, tables split anywhere, diagrams shrink or overflow, and once the HTML exists nobody can adjust a single page without regenerating everything. This skill is built around three things:
 

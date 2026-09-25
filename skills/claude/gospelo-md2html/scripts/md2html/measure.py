@@ -123,6 +123,7 @@ _MEASURE_JS = r"""
       entry.scale = parseFloat(el.dataset.scale || '1');
       entry.intrinsicW = parseFloat(el.dataset.intrinsicW || '0');
       entry.intrinsicH = parseFloat(el.dataset.intrinsicH || '0');
+      entry.split = parseInt(el.dataset.split || '1', 10);
     }
     result[el.dataset.block] = entry;
   }

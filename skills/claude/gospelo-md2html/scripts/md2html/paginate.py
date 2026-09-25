@@ -443,8 +443,8 @@ def _unique_id(base: str, existing: set[str]) -> str:
 # --------------------------------------------------------------------------
 # two-column flow (docs/04 section 4.7): fill the left column top to bottom,
 # then the right column (column order; traced on the page it forms a mirrored N). Wide blocks (many-column tables,
-# code, wide figures) become full-width bands; the two-column region above a
-# band is balanced so both columns end at the same height.
+# wide figures) become full-width bands; the two-column region above a band is
+# balanced so both columns end at the same height. A page end is not balanced.
 # --------------------------------------------------------------------------
 
 WIDE_TABLE_COLUMNS = 4
@@ -532,7 +532,7 @@ def is_wide(block: dict[str, Any], ctx: PaginateContext, queue: deque | None = N
         return False
     if t == "table":
         return len(block["header"]) >= WIDE_TABLE_COLUMNS
-    if t in ("code", "html"):
+    if t == "html":
         return True
     if t in FIGURE_TYPES:
         bid = block.get("id", "")
@@ -570,11 +570,11 @@ def paginate_two_columns(blocks: list[dict[str, Any]], ctx: PaginateContext,
         cur.used_before += cur.region.height()
         cur.region = None
 
-    def flush(balance: bool = False) -> None:
-        """balance=True when the page ends on a section break (not by overflow):
-        the open two-column region is then evened out so both columns end together."""
+    def flush() -> None:
+        """Close the page. The open region is not balanced: at a page end the columns fill
+        top-down (left, then right); only a region above a band is evened out."""
         nonlocal cur
-        close_region(balance=balance)
+        close_region(balance=False)
         if not cur.is_empty():
             pages.append(cur)
 
@@ -590,12 +590,12 @@ def paginate_two_columns(blocks: list[dict[str, Any]], ctx: PaginateContext,
         b = queue.popleft()
         t = b["type"]
         if t == "pagebreak":
-            flush(balance=True)
+            flush()
             cur = TwoColPage(title=cur.title, continued=cur.title is not None)
             continue
         if t == "heading" and b["level"] == 1:
             if ctx.is_slide:
-                flush(balance=True)
+                flush()
                 cover = Page(kind="cover", blocks=[b])
                 if queue and queue[0]["type"] == "paragraph":
                     cover.blocks.append(queue.popleft())
@@ -603,10 +603,10 @@ def paginate_two_columns(blocks: list[dict[str, Any]], ctx: PaginateContext,
                 cur = TwoColPage(title=ctx.doc_title, continued=False)
                 continue
             if not cur.is_empty():
-                flush(balance=True)
+                flush()
                 cur = TwoColPage()
         if t == "heading" and b["level"] == 2 and ctx.is_slide:
-            flush(balance=True)
+            flush()
             cur = TwoColPage(title=b["text"], continued=False)
             continue
 
@@ -694,7 +694,7 @@ def paginate_two_columns(blocks: list[dict[str, Any]], ctx: PaginateContext,
         else:
             flush()
             cur = continuation()
-    flush(balance=True)
+    flush()
     for p in pages:
         for blk in p.blocks:
             blk.pop("_order", None)
@@ -727,21 +727,15 @@ def _balance_region(reg: Region, ctx: PaginateContext) -> None:
             left.append(b)
             lacc.add(h)
             continue
-        split = _try_split(ctx, b, h, lacc.remaining(target, h), page_empty=True)
-        if split is not None:
-            head, head_h, tail, tail_h = split
-            left.append(head)
-            lacc.add(head_h)
-            ctx.heights[tail["id"]] = tail_h
-            ctx.heights_single[tail["id"]] = tail_h
-            tail["_order"] = _next_order(head.get("_order"))
-            right.append(tail)
-        elif not left:
+        # whole blocks only: splitting a short list or code block just to even the columns reads as a stray break
+        if not left:
             left.append(b)  # an unsplittable first block stays left, whatever its height
             lacc.add(h)
         else:
             right.append(b)
-    if right and left and left[-1]["type"] == "heading" and len(left) > 1:
+    if right and left and left[-1]["type"] == "heading":
+        if len(left) == 1:
+            return  # balancing would strand a lone heading away from its content
         right.insert(0, left.pop())
     lacc = Accumulator()
     racc = Accumulator()

@@ -89,8 +89,17 @@ class Metrics:
         return min(FOOTER_MAX_BODY_RATIO * self.F, FOOTER_MAX_MARGIN_RATIO * self.margin_v_px)
 
     @property
+    def footer_band_px(self) -> float:
+        return self.margin_v_px
+
+    @property
     def table_scale(self) -> float:
         return 0.85 if self.fmt.is_slide else 0.9
+
+    @property
+    def code_scale(self) -> float:
+        # half-width columns need the small size; full-width code on portrait paper stays readable
+        return 0.6 if self.columns == "two" else 0.85
 
     # ---- content box ---------------------------------------------------
     @property
@@ -99,7 +108,7 @@ class Metrics:
 
     @property
     def content_h_px(self) -> float:
-        return self.page_h_px - 2 * self.margin_v_px - self.header_band_px - self.header_gap_px
+        return self.page_h_px - self.margin_v_px - self.footer_band_px - self.header_band_px - self.header_gap_px
 
     @property
     def gutter_px(self) -> float:
@@ -144,12 +153,14 @@ class Metrics:
             f"--header-band: {self.header_band_px:.3f}px;",
             f"--header-gap: {self.header_gap_px:.3f}px;",
             f"--footer-size: {self.footer_size_px:.3f}px;",
+            f"--footer-band: {self.footer_band_px:.3f}px;",
             f"--content-w: {self.content_w_px:.3f}px;",
             f"--content-h: {self.content_h_px:.3f}px;",
             f"--gutter: {self.gutter_px:.3f}px;",
             f"--text-fr: {text_fr}fr;",
             f"--figure-fr: {figure_fr}fr;",
             f"--table-scale: {self.table_scale};",
+            f"--code-scale: {self.code_scale};",
         ]
         return ":root {\n  " + "\n  ".join(lines) + "\n}\n"
 

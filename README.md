@@ -44,7 +44,7 @@ Supported platforms: **macOS / Linux / WSL2**
 | Python 3.10+, markdown-it-py, Playwright | resolved automatically by `uv run` from the script's inline metadata (no `pip`, no venv) |
 | Chromium | one-time: `uv run <skill>/scripts/md2html.py setup` |
 
-Mermaid.js and Font Awesome Free are vendored in the skill; nothing else is downloaded at run time.
+Mermaid.js, Shiki (syntax highlighting) and Font Awesome Free are vendored in the skill; nothing else is downloaded at run time.
 
 ## Usage example
 
@@ -236,7 +236,7 @@ md2html/
 │   │           ├── layout_rules.md      # Pagination rules
 │   │           ├── editing_guide.md     # How an agent edits the envelope
 │   │           ├── color-scheme.md      # Mermaid palette used in the docs' diagrams
-│   │           └── vendor/              # Mermaid.js (per version), Font Awesome Free, BIZ UD fonts (see THIRD_PARTY_NOTICES.md)
+│   │           └── vendor/              # Mermaid.js (per version), Shiki, Font Awesome Free, BIZ UD fonts (see THIRD_PARTY_NOTICES.md)
 │   └── opencode/README.md               # How OpenCode picks up the same skill
 ├── tests/                               # pytest: pagination and two columns, inline split, envelope I/O, migration,
 │                                        # Mermaid vendoring and prerender, PPTX export, fonts

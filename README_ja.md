@@ -44,7 +44,7 @@ English version: [README.md](https://github.com/gospelo-dev/md2html/blob/main/RE
 | Python 3.10+、markdown-it-py、Playwright | スクリプト先頭のインラインメタデータから `uv run` が自動で解決 (`pip` も venv も不要) |
 | Chromium | 初回のみ `uv run <skill>/scripts/md2html.py setup` |
 
-Mermaid.js と Font Awesome Free はスキルに同梱しており、実行時のダウンロードはありません。
+Mermaid.js、Shiki (シンタックスハイライト)、Font Awesome Free はスキルに同梱しており、実行時のダウンロードはありません。
 
 ## 使い方
 
@@ -235,7 +235,7 @@ md2html/
 │   │           ├── layout_rules.md      # ページ区切りの規則
 │   │           ├── editing_guide.md     # エージェントがエンベロープを編集する手順
 │   │           ├── color-scheme.md      # ドキュメントの図で使う Mermaid の配色
-│   │           └── vendor/              # Mermaid.js (版別)、Font Awesome Free、BIZ UD フォント (THIRD_PARTY_NOTICES.md 参照)
+│   │           └── vendor/              # Mermaid.js (版別)、Shiki、Font Awesome Free、BIZ UD フォント (THIRD_PARTY_NOTICES.md 参照)
 │   └── opencode/README.md               # OpenCode から同じスキルを使う方法
 ├── tests/                               # pytest: ページ割りと 2 段組、インライン分割、エンベロープ入出力、移行、
 │                                        # Mermaid 同梱と prerender、PPTX 出力、フォント

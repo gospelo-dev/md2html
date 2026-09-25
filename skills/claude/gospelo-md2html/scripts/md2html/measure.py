@@ -203,13 +203,24 @@ _SVGS_JS = r"""
 }
 """
 
+_CODE_HTML_JS = r"""
+() => {
+  const out = {};
+  for (const pre of document.querySelectorAll('pre.code[data-highlighted="true"]')) {
+    const bid = pre.dataset.block;
+    const code = pre.querySelector('code');
+    if (bid && code) { out[bid] = code.innerHTML; }
+  }
+  return out;
+}
+"""
 
-def verify_document(browser: Browser, html_path: Path) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    """Per-page overflow report, plus the SVG markup Mermaid produced for each
-    mermaid block (block id -> <svg ...>, already sized by figures.js). The SVGs
-    let `prerender` mode write the final document without the Mermaid library."""
+
+def verify_document(browser: Browser, html_path: Path) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str]]:
+    """Per-page overflow report, prerendered Mermaid SVGs, and prerendered Shiki
+    code HTML (block id -> innerHTML of the <code> element)."""
     page = browser.open(html_path)
     try:
-        return page.evaluate(_VERIFY_JS), page.evaluate(_SVGS_JS)
+        return page.evaluate(_VERIFY_JS), page.evaluate(_SVGS_JS), page.evaluate(_CODE_HTML_JS)
     finally:
         page.close()

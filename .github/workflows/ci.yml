@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # the kumihan golden SVGs record the Python and library versions they were generated with
+      - name: pytest
+        run: >
+          uv run --python 3.13.1
+          --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright
+          --with python-pptx --with pillow --with brotli
+          --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py
+          pytest tests -q
+
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      MD2HTML: skills/claude/gospelo-md2html/scripts/md2html.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Chromium
+        run: uv run --with playwright playwright install --with-deps chromium
+      - name: Import fixtures (16:9 and A4)
+        run: |
+          mkdir -p out
+          for page in 16x9 a4; do
+            uv run "$MD2HTML" import tests/fixtures/tall_flowchart.md --page "$page" -o "out/flowchart-$page.gospelo.html" --force
+            uv run "$MD2HTML" import tests/fixtures/code_blocks.md --page "$page" -o "out/code-$page.gospelo.html" --force
+          done
+      - name: Code is highlighted and the Shiki library is not shipped
+        run: |
+          for f in out/code-*.gospelo.html; do
+            n=$(grep -o 'data-highlighted="true"' "$f" | wc -l)
+            if [ "$n" -ne 2 ]; then echo "$f: expected 2 highlighted blocks, got $n"; exit 1; fi
+            if grep -q 'data-shiki-version' "$f"; then echo "$f: Shiki library was shipped"; exit 1; fi
+          done
+      - name: Rebuild a generated document in place
+        run: uv run "$MD2HTML" build out/code-16x9.gospelo.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-output
+          path: out/

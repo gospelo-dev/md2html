@@ -28,6 +28,7 @@ class RenderContext:
     html_dir: Path | None       # output directory (None = measurement, use absolute file paths)
     embed_images: bool = False
     svgs: dict[str, str] | None = None  # prerendered Mermaid SVG per block id (from the verify pass)
+    code_html: dict[str, str] | None = None  # prerendered Shiki HTML per block id
     font_css: str = ""                  # @font-face rules for the embedded font subsets (fonts.py)
 
 
@@ -58,9 +59,12 @@ def render_block(block: dict[str, Any], ctx: RenderContext, mode: str) -> str:
     if t == "table":
         return _render_table(block, attr)
     if t == "code":
+        lang = f' data-lang="{_esc(block["lang"])}"' if block.get("lang") else ""
+        prerendered = (ctx.code_html or {}).get(bid)
+        if prerendered:
+            return f'<pre class="code"{attr}{lang} data-highlighted="true"><code>{prerendered}</code></pre>'
         lines = "".join(f'<span class="line">{_esc(line) or " "}</span>' for line in block["lines"])
         note = '<span class="continued-note">(続き)</span>' if block.get("continued") else ""
-        lang = f' data-lang="{_esc(block["lang"])}"' if block.get("lang") else ""
         return f'<pre class="code"{attr}{lang}><code>{note}{lines}</code></pre>'
     if t == "html":
         return f'<div class="raw-html"{attr}>{block["html"]}</div>'
@@ -276,16 +280,18 @@ def _font_vars(layout: Layout) -> str:
     return ":root {\n" + "\n".join(lines) + "\n}\n" if lines else ""
 
 
-def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, out_dir: Path | None) -> list[str]:
+def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, needs_shiki: bool, out_dir: Path | None) -> list[str]:
     """Large static assets go last: the Mermaid library (when the document has
-    diagrams) and figures.js. out_dir=None means a temporary (measurement)
-    document: always embed the library."""
+    diagrams), Shiki (when code blocks have a language), and figures.js.
+    out_dir=None means a temporary (measurement) document: always embed."""
     parts = []
     if needs_mermaid:
-        # `prerender` still needs the library while the verify pass draws the SVGs; the final
-        # document (needs_mermaid False once every diagram is prerendered) omits it
         lib_mode = "embed" if out_dir is None or ctx.layout.mermaid_lib == "prerender" else ctx.layout.mermaid_lib
         parts.append(assets.mermaid_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
+    if needs_shiki:
+        tag = assets.shiki_script_tag()
+        if tag:
+            parts.append(tag)
     parts.append("<script>\n" + assets.figures_js() + "\n</script>")
     return parts
 
@@ -299,20 +305,22 @@ def effective_layout(layout) -> dict[str, Any]:
     return out
 
 
-def _needs(blocks: list[dict[str, Any]], svgs: dict[str, str] | None = None) -> tuple[bool, bool]:
-    """(needs the Mermaid library, needs Font Awesome). Diagrams that already have a
-    prerendered SVG do not need the library; fa: icons inside them still need the font."""
+def _needs(blocks: list[dict[str, Any]], svgs: dict[str, str] | None = None,
+           code_html: dict[str, str] | None = None) -> tuple[bool, bool, bool]:
+    """(needs Mermaid, needs Font Awesome, needs Shiki)."""
     mermaid = [b for b in blocks if b["type"] == "mermaid"]
     needs_fa = any("fa:" in b["source"] for b in mermaid)
     pending = [b for b in mermaid if not (svgs and b.get("id") in svgs)]
-    return bool(pending), needs_fa
+    code_with_lang = [b for b in blocks if b["type"] == "code" and b.get("lang")]
+    needs_shiki = bool(code_with_lang) and not code_html
+    return bool(pending), needs_fa, needs_shiki
 
 
 def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: RenderContext,
                     date_text: str | None) -> str:
     title = doc["meta"]["title"]
     all_blocks = [b for p in pages for b in p["blocks"]]
-    needs_mermaid, needs_fa = _needs(all_blocks, ctx.svgs)
+    needs_mermaid, needs_fa, needs_shiki = _needs(all_blocks, ctx.svgs, ctx.code_html)
     # The file is a Gospelo Document: the envelope (original Markdown as pages[0],
     # the pages the HTML is rendered from, the effective layout) is the first thing
     # in <head>, so `build out.gospelo.html` can regenerate the file from itself.
@@ -327,7 +335,7 @@ def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: Rende
     total = len(pages)
     for i, page in enumerate(pages, start=1):
         body.append(render_page(page, ctx, i, total, title, date_text))
-    body += _tail_scripts(ctx, needs_mermaid, ctx.html_dir)
+    body += _tail_scripts(ctx, needs_mermaid, needs_shiki, ctx.html_dir)
     body.append(assets.page_number_script())
     body.append("</body></html>")
     return head + "\n" + "\n".join(body)
@@ -336,7 +344,7 @@ def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: Rende
 def render_measure_document(blocks: list[dict[str, Any]], ctx: RenderContext) -> str:
     """One or two flow containers (text column width and single width)."""
     m = ctx.metrics
-    needs_mermaid, needs_fa = _needs(blocks)
+    needs_mermaid, needs_fa, needs_shiki = _needs(blocks)
     head = _head(ctx, "measure", needs_fa, None, "ja")
     body = ["<body>"]
     widths: list[tuple[str, float, str]] = []
@@ -350,6 +358,6 @@ def render_measure_document(blocks: list[dict[str, Any]], ctx: RenderContext) ->
         for b in blocks:
             body.append(render_block(b, ctx, fig_mode))
         body.append("</div>")
-    body += _tail_scripts(ctx, needs_mermaid, None)
+    body += _tail_scripts(ctx, needs_mermaid, needs_shiki, None)
     body.append("</body></html>")
     return head + "\n" + "\n".join(body)

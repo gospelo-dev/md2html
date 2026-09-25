@@ -3,11 +3,13 @@
 This repository vendors the following third-party assets under
 `skills/claude/gospelo-md2html/references/vendor/`. They are redistributed
 unmodified (except that the Font Awesome CSS font URL is rewritten to a data
-URI at HTML generation time).
+URI at HTML generation time), apart from Shiki, which is a bundle built from
+the unmodified npm packages (see below).
 
 | Asset | Version | License | Source |
 | --- | --- | --- | --- |
 | `mermaid/<version>/mermaid.min.js` | Mermaid 11.12.2 | MIT (Copyright (c) 2014-2025 Knut Sveidqvist) | https://github.com/mermaid-js/mermaid |
+| `shiki/<version>/shiki.min.js` | Shiki 4.4.3 (bundle of `shiki`, its `@shikijs/*` packages, TextMate grammars and the `github-light-high-contrast` theme) | MIT (Copyright (c) 2021 Pine Wu, (c) 2023 Anthony Fu); the bundled dependencies, grammars and theme are MIT or ISC | https://github.com/shikijs/shiki |
 | `fontawesome.min.css`, `fa-solid.min.css` | Font Awesome Free 6.7.2 | MIT (CSS/code) | https://github.com/FortAwesome/Font-Awesome |
 | `fa-solid-900.woff2` | Font Awesome Free 6.7.2 | SIL OFL 1.1 (font), icons CC BY 4.0 | https://fontawesome.com/license/free |
 | `fonts/bizud/BIZUDPGothic-{Regular,Bold}.woff2`, `fonts/bizud/BIZUDGothic-{Regular,Bold}.woff2` | BIZ UDGothic / BIZ UDPGothic (Google Fonts release) | SIL OFL 1.1 (Copyright 2022 The BIZ UDGothic Project Authors; no Reserved Font Name), text in `fonts/bizud/OFL.txt` | https://github.com/googlefonts/morisawa-biz-ud-gothic |
@@ -36,6 +38,22 @@ To add a version: create `mermaid/<version>/`, copy the unmodified
 `dist/mermaid.min.js` of that release and its `LICENSE` file (as `LICENSE.txt`),
 and add a row to the table above. The directory name must match the version
 string inside the bundle; the tool checks this.
+
+## Shiki: build-only syntax highlighter
+
+Shiki colours code blocks that name a language. Like Mermaid in `prerender`
+mode, it runs only in the measurement and verify passes inside Chromium; the
+generated document contains the coloured `<span>` markup, never the library,
+so no Shiki notice is needed in the document.
+
+`shiki/<version>/shiki.min.js` is an IIFE built with esbuild from
+`shiki/build/entry.mjs`, which loads the JavaScript regex engine (no WASM), the
+`github-light-high-contrast` theme and a fixed set of languages, and exposes
+`window.__shikiInit()`. To rebuild or add a version: in `shiki/build/`, run
+`npm install && npm run build` (versions are pinned in `package.json`), move `shiki.min.js` to `shiki/<version>/` together
+with Shiki's `LICENSE` (as `LICENSE.txt`), and update the table above. The
+newest vendored version is used. With no Shiki vendored, code blocks are
+written uncoloured.
 
 ## Notices carried by generated documents
 

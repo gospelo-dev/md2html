@@ -19,6 +19,7 @@ REFERENCES = SKILL_DIR / "references"
 VENDOR = REFERENCES / "vendor"
 
 MERMAID_DIR = VENDOR / "mermaid"
+SHIKI_DIR = VENDOR / "shiki"
 FA_CSS = VENDOR / "fontawesome.min.css"
 FA_SOLID_CSS = VENDOR / "fa-solid.min.css"
 FA_WOFF2 = VENDOR / "fa-solid-900.woff2"
@@ -134,6 +135,36 @@ def mermaid_script_tag(mode: str, out_dir: Path | None, version: str | None = No
         shutil.copyfile(src, target)
     shutil.copyfile(mermaid_license(version), out_dir / f"LICENSE.mermaid-{version}.txt")
     return notice + f'\n<script src="{js_name}" data-mermaid-version="{version}"></script>'
+
+
+# --------------------------------------------------------------------------
+# Shiki (per-version vendoring, same pattern as Mermaid)
+# --------------------------------------------------------------------------
+
+SHIKI_COPYRIGHT = "Copyright (c) 2021 Pine Wu, Anthony Fu"
+SHIKI_URL = "https://github.com/shikijs/shiki"
+
+
+def shiki_versions() -> list[str]:
+    if not SHIKI_DIR.is_dir():
+        return []
+    found = [p.name for p in SHIKI_DIR.iterdir()
+             if p.is_dir() and _VERSION_RE.match(p.name) and (p / "shiki.min.js").is_file()]
+    return sorted(found, key=_version_key)
+
+
+def default_shiki_version() -> str | None:
+    versions = shiki_versions()
+    return versions[-1] if versions else None
+
+
+def shiki_script_tag() -> str:
+    version = default_shiki_version()
+    if version is None:
+        return ""
+    src = SHIKI_DIR / version / "shiki.min.js"
+    text = _read(src)
+    return f'<script data-shiki-version="{version}">\n{text}\n</script>'
 
 
 # --------------------------------------------------------------------------

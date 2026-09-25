@@ -220,16 +220,17 @@ def verify_and_fix(browser: Browser, doc: dict[str, Any], pages: list[dict[str, 
         keep = os.environ.get("MD2HTML_KEEP_TEMP") == "1"
         try:
             path.write_text(html_text, encoding="utf-8")
-            verify, svgs = verify_document(browser, path)
+            verify, svgs, code_html = verify_document(browser, path)
         finally:
             if not keep:
                 path.unlink(missing_ok=True)
         overflowing = [v for v in verify if v["overflowPx"] > 0 and v["mode"] != "cover"]
         if not overflowing:
             if ctx.layout.mermaid_lib == "prerender" and svgs:
-                # write the diagrams the verify pass drew instead of the Mermaid library
                 ctx.svgs = svgs
-                html_text = render_document(doc, pages, ctx, date)
+            if code_html:
+                ctx.code_html = code_html
+            html_text = render_document(doc, pages, ctx, date)
             return html_text, verify, rounds, pages
         rounds += 1
         if verbose:

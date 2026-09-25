@@ -269,6 +269,7 @@
     if (mermaidNodes.length > 0) {
       await window.mermaid.run({ nodes: mermaidNodes, suppressErrors: false });
     }
+    if (window.__shikiInit) { await window.__shikiInit(); }
     var imgs = Array.prototype.slice.call(document.querySelectorAll("figure.figure img"));
     await Promise.all(imgs.map(function (img) {
       return img.decode().catch(function () {

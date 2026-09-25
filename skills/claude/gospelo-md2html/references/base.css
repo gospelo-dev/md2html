@@ -18,7 +18,7 @@ body {
 @page { size: var(--page-w) var(--page-h); margin: 0; }
 .page {
   width: var(--page-w); height: var(--page-h);
-  padding: var(--margin-v) var(--margin-h);
+  padding: var(--margin-v) var(--margin-h) var(--footer-band, var(--margin-v));
   position: relative; overflow: hidden; background: #fff;
   break-after: page; page-break-after: always;
 }
@@ -49,7 +49,7 @@ body {
 .column-text.two > .segment.wide { min-width: 0; }
 
 .page-footer {
-  position: absolute; left: var(--margin-h); right: var(--margin-h); bottom: 0; height: var(--margin-v);
+  position: absolute; left: var(--margin-h); right: var(--margin-h); bottom: 0; height: var(--footer-band, var(--margin-v));
   font-size: var(--footer-size); line-height: 1.4; color: #888;
   display: flex; align-items: center; justify-content: space-between;
 }
@@ -91,10 +91,11 @@ th.center, td.center { text-align: center; }
 th.right, td.right { text-align: right; }
 table.continued caption { caption-side: top; text-align: left; font-size: calc(var(--font-size) * 0.8); color: #888; padding-bottom: calc(var(--font-size) * 0.2); }
 
-pre.code { background: #f6f8fa; border: 1px solid #e8e8e8; border-radius: 4px; padding: calc(var(--font-size) * 0.8); margin: calc(var(--font-size) * 0.5) 0 calc(var(--font-size) * 1.0); font-size: calc(var(--font-size) * 0.85); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+pre.code { background: #f6f8fa; border: 1px solid #e8e8e8; border-radius: 4px; padding: calc(var(--font-size) * 0.6); margin: calc(var(--font-size) * 0.5) 0 calc(var(--font-size) * 1.0); font-size: calc(var(--font-size) * var(--code-scale, 0.6)); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; color: #0e1116; tab-size: 4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 pre.code code { display: block; padding: 0; background: none; border-radius: 0; font-family: var(--code-font-family, 'SFMono-Regular', Menlo, 'BIZ UDGothic', 'Noto Sans Mono CJK JP', monospace); font-size: inherit; }
 pre.code .line { display: block; }
-pre.code .continued-note { display: block; color: #888; font-family: inherit; margin-bottom: calc(var(--font-size) * 0.3); }
+/* exactly one code line tall: pagination estimates a continued block as note + lines */
+pre.code .continued-note { display: block; color: #888; font-family: inherit; }
 /* CJK text inside code needs an embeddable monospace fallback; without it Chromium's PDF picks Osaka-Mono */
 code { font-family: var(--code-font-family, 'SFMono-Regular', Menlo, 'BIZ UDGothic', 'Noto Sans Mono CJK JP', monospace); font-size: 0.9em; background: #f4f4f4; padding: 0 0.3em; border-radius: 3px; }
 

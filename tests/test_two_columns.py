@@ -131,15 +131,29 @@ def test_balancing_never_makes_the_region_taller():
     assert pages[1].title == "Next"
 
 
-def test_columns_are_balanced_at_a_section_end():
+def test_page_end_is_not_balanced_left_column_fills_first():
     blocks, heights = [], {}
-    for i in range(4):
+    for i in range(6):
         b, h = para(i, 100)
         blocks.append(b)
         heights[b["id"]] = h
     pages = paginate(blocks, ctx(heights, capacity=500))
     (cols,) = layout_of(pages[0])
-    assert cols["left"] == [0, 1] and cols["right"] == [2, 3]
+    assert cols["left"] == [0, 1, 2, 3] and cols["right"] == [4, 5]
+
+
+def test_balancing_does_not_strand_a_lone_heading():
+    """Regression: a page holding only a heading and an unsplittable code block was
+    balanced into heading | code, leaving the heading alone in the left column."""
+    heading = {"type": "heading", "level": 3, "text": "H", "id": "h"}
+    code = {"type": "code", "lang": "json", "lines": ["x"] * 4, "id": "c"}
+    table = {"type": "table", "header": ["a", "b", "c", "d"], "rows": [["1", "2", "3", "4"]], "id": "t"}
+    heights = {"h": BlockHeight(30, 20, 5), "c": BlockHeight(250, 10, 20, lines=[60] * 4, padding=10),
+               "t": BlockHeight(80, 0, 10, thead=30, rows=[50])}
+    pages = paginate([heading, code, table], ctx(heights, capacity=500))
+    cols, band = layout_of(pages[0])
+    assert band["kind"] == "wide"
+    assert cols["left"] == [0, 1] and cols["right"] == []
 
 
 def test_short_region_is_not_balanced():

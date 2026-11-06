@@ -153,6 +153,12 @@ ELK_BUILD_DIR = VENDOR / "mermaid-layout-elk" / "build"
 
 
 def cache_dir() -> Path:
+    """GOSPELO_MD2HTML_CACHE_DIR if set, else ${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html.
+    The dedicated variable moves only md2html's cache (XDG_CACHE_HOME also
+    moves Playwright's browsers on Linux)."""
+    explicit = os.environ.get("GOSPELO_MD2HTML_CACHE_DIR")
+    if explicit:
+        return Path(explicit)
     base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
     return Path(base) / "gospelo-md2html"
 

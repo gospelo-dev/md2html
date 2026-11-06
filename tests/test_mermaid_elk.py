@@ -84,8 +84,15 @@ def test_the_bundle_is_not_in_the_repository():
 
 
 def test_cache_dir_follows_xdg_cache_home(monkeypatch, tmp_path):
+    monkeypatch.delenv("GOSPELO_MD2HTML_CACHE_DIR", raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     assert assets.cache_dir() == tmp_path / "gospelo-md2html"
+
+
+def test_cache_dir_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("GOSPELO_MD2HTML_CACHE_DIR", str(tmp_path / "mine"))
+    assert assets.cache_dir() == tmp_path / "mine"
 
 
 @needs_built
@@ -286,7 +293,8 @@ def test_failed_bundle_load_is_an_error_not_a_fallback(browser, tmp_path):
 
 
 def test_import_without_the_bundle_fails_and_names_setup(tmp_path):
-    env = dict(os.environ, XDG_CACHE_HOME=str(tmp_path / "empty-cache"))
+    # not XDG_CACHE_HOME: on Linux that also hides Playwright's Chromium
+    env = dict(os.environ, GOSPELO_MD2HTML_CACHE_DIR=str(tmp_path / "empty-cache"))
     r = _import(FIXTURE, tmp_path / "elk.gospelo.html", env=env)
     if "Executable doesn't exist" in r.stderr:
         pytest.skip("Chromium is not available")

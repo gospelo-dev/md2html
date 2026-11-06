@@ -132,7 +132,8 @@ flowchart-elk TD
   (`scripts/md2html/assets.py` の `MERMAID_LAYOUT_ELK`)。
 - バンドルはリポジトリに含めない (elkjs は EPL-2.0)。`setup --elk` が
   `references/vendor/mermaid-layout-elk/build/` の手順 (版を固定した `package.json`) で、利用者の
-  キャッシュ `${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html/mermaid-layout-elk/0.2.0/` に作る。
+  キャッシュ `${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html/mermaid-layout-elk/0.2.0/` に作る
+  (環境変数 `GOSPELO_MD2HTML_CACHE_DIR` で `gospelo-md2html/` の場所を変えられる)。
 - フォールバックはしない。ELK を指定したのにバンドルがない、読み込めない、または上の名前以外の
   `elk*` を指定した場合は、既定 (dagre) で描かずにエラーで止まる (終了コード 1)。
   バンドルがないときは `setup --elk` を実行する。

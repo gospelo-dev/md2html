@@ -91,7 +91,11 @@ def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="md2html.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("setup", help="install Chromium for Playwright (first run only)")
+    ps = sub.add_parser("setup", help="install Chromium for Playwright (first run only)")
+    ps.add_argument("--elk", action="store_true",
+                    help="also build the Mermaid ELK layout bundle into the user cache (needs Node.js and npm); "
+                         "required once before rendering diagrams that ask for layout: elk")
+    ps.add_argument("--elk-only", action="store_true", help="build only the ELK layout bundle (skip Chromium)")
 
     pi = sub.add_parser("import", help="Markdown -> Gospelo Document (.gospelo.html, paginated and verified)")
     pi.add_argument("input", type=Path)
@@ -347,10 +351,19 @@ def print_verbose_heights(heights: dict[str, BlockHeight]) -> None:
 # --------------------------------------------------------------------------
 
 def cmd_setup(args: argparse.Namespace) -> int:
-    print("Installing Chromium for Playwright ...")
-    result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
-    if result.returncode != 0:
-        raise CliError("playwright install chromium failed")
+    if not args.elk_only:
+        print("Installing Chromium for Playwright ...")
+        result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
+        if result.returncode != 0:
+            raise CliError("playwright install chromium failed")
+    if args.elk or args.elk_only:
+        from md2html import elk_setup
+        print("Building the Mermaid ELK layout bundle ...")
+        try:
+            for path in elk_setup.build_all():
+                print(f"wrote {path}")
+        except elk_setup.ElkSetupError as e:
+            raise CliError(str(e)) from e
     print("done")
     return EXIT_OK
 

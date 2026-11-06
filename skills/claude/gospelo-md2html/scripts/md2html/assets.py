@@ -10,6 +10,7 @@ layout.mermaidVersion), and new documents default to the newest vendored one.
 from __future__ import annotations
 
 import base64
+import os
 import re
 import shutil
 from pathlib import Path
@@ -135,6 +136,120 @@ def mermaid_script_tag(mode: str, out_dir: Path | None, version: str | None = No
         shutil.copyfile(src, target)
     shutil.copyfile(mermaid_license(version), out_dir / f"LICENSE.mermaid-{version}.txt")
     return notice + f'\n<script src="{js_name}" data-mermaid-version="{version}"></script>'
+
+
+# --------------------------------------------------------------------------
+# Mermaid ELK layout (@mermaid-js/layout-elk). Not vendored: elkjs is EPL-2.0,
+# so the repository carries only the build recipe
+# (references/vendor/mermaid-layout-elk/build/) and `setup --elk` builds
+# <cache>/mermaid-layout-elk/<version>/{mermaid-layout-elk.min.js,LICENSE.txt}
+# on the user's machine (elk_setup.py). Included in a document only when a
+# diagram asks for ELK. figures.js registers it, and fails when a diagram asks
+# for ELK but the bundle is absent (Mermaid itself would silently fall back to
+# dagre).
+# --------------------------------------------------------------------------
+
+ELK_BUILD_DIR = VENDOR / "mermaid-layout-elk" / "build"
+
+
+def cache_dir() -> Path:
+    """GOSPELO_MD2HTML_CACHE_DIR if set, else ${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html.
+    The dedicated variable moves only md2html's cache (XDG_CACHE_HOME also
+    moves Playwright's browsers on Linux)."""
+    explicit = os.environ.get("GOSPELO_MD2HTML_CACHE_DIR")
+    if explicit:
+        return Path(explicit)
+    base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "gospelo-md2html"
+
+
+ELK_DIR = cache_dir() / "mermaid-layout-elk"
+
+# Mermaid version -> layout-elk version rendered with it. A pairing is chosen
+# per vendored Mermaid (the layout-elk release current when that Mermaid was
+# released) and is never guessed for an unlisted Mermaid version.
+MERMAID_LAYOUT_ELK = {"11.12.2": "0.2.0"}
+
+_ELK_BUNDLE_VERSION_RE = re.compile(r'name:"@mermaid-js/layout-elk",version:"(\d+\.\d+\.\d+)"')
+
+# ELK requests Mermaid recognises: `flowchart-elk`, `layout: elk` (front matter
+# config or %%{init}%% directive, including elk.stress etc.), and the older
+# `defaultRenderer: elk`. Over-matching only includes the bundle; it does not
+# change how a diagram is drawn. Under-matching is caught in figures.js.
+_ELK_REQUEST_RE = re.compile(
+    r"^\s*flowchart-elk\b"
+    r"|[\"']?\b(?:layout|defaultRenderer)[\"']?\s*:\s*[\"']?elk\b",
+    re.MULTILINE,
+)
+
+
+def mermaid_requests_elk(source: str) -> bool:
+    return bool(_ELK_REQUEST_RE.search(source))
+
+
+def elk_version_for(mermaid_version: str | None) -> str:
+    mermaid_version = resolve_mermaid_version(mermaid_version)
+    elk = MERMAID_LAYOUT_ELK.get(mermaid_version)
+    if elk is None:
+        raise AssetError(
+            f"a diagram requests the ELK layout, but no layout-elk is paired with Mermaid {mermaid_version} "
+            f"(MERMAID_LAYOUT_ELK in assets.py; paired: {', '.join(sorted(MERMAID_LAYOUT_ELK)) or 'none'})"
+        )
+    return elk
+
+
+def elk_bundle(version: str) -> Path:
+    return ELK_DIR / version / "mermaid-layout-elk.min.js"
+
+
+def elk_license(version: str) -> Path:
+    return ELK_DIR / version / "LICENSE.txt"
+
+
+def _elk_bundle_text(version: str) -> str:
+    if not (elk_bundle(version).is_file() and elk_license(version).is_file()):
+        raise AssetError(
+            f"a diagram requests the ELK layout, but the layout-elk {version} bundle is not built "
+            f"(expected {elk_bundle(version).parent}). Build it once with: "
+            f"uv run {SKILL_DIR / 'scripts' / 'md2html.py'} setup --elk  (needs Node.js and npm)"
+        )
+    text = _read(elk_bundle(version))
+    m = _ELK_BUNDLE_VERSION_RE.search(text)
+    if not m:
+        raise AssetError(f"{elk_bundle(version)} does not carry the @mermaid-js/layout-elk version")
+    if m.group(1) != version:
+        raise AssetError(f"{elk_bundle(version)} reports version {m.group(1)}, directory says {version}")
+    return text
+
+
+def elk_notice(version: str) -> str:
+    license_text = _read(elk_license(version)).strip()
+    if "--" in license_text:
+        raise AssetError(f"{elk_license(version)} contains '--', which cannot appear inside an HTML comment")
+    return (f"<!--\n@mermaid-js/layout-elk {version} (bundles elkjs, EPL-2.0) | {MERMAID_URL}\n\n"
+            + license_text + "\n-->")
+
+
+def elk_script_tag(mode: str, out_dir: Path | None, mermaid_version: str | None = None) -> str:
+    """Same modes as mermaid_script_tag. Must come after the Mermaid tag and
+    before figures.js."""
+    version = elk_version_for(mermaid_version)
+    text = _elk_bundle_text(version)  # existence and version consistency check
+    notice = elk_notice(version)
+    attr = f'data-mermaid-layout-elk-version="{version}"'
+    if mode == "embed":
+        return notice + f"\n<script {attr}>\n" + text + "\n</script>"
+    if mode != "link":
+        raise AssetError(f"unknown mermaid lib mode {mode!r}")
+    if out_dir is None:
+        raise AssetError("mermaid link mode needs an output directory")
+    src = elk_bundle(version)
+    js_name = f"mermaid-layout-elk-{version}.min.js"
+    target = out_dir / js_name
+    if target.resolve() != src.resolve():
+        shutil.copyfile(src, target)
+    shutil.copyfile(elk_license(version), out_dir / f"LICENSE.mermaid-layout-elk-{version}.txt")
+    return notice + f'\n<script src="{js_name}" {attr}></script>'
 
 
 # --------------------------------------------------------------------------

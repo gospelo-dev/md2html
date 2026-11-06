@@ -35,6 +35,14 @@ Chromium で描いて SVG として書き込む (既定の `--mermaid-lib preren
 uv run <skill>/scripts/md2html.py setup
 ```
 
+- Mermaid の ELK レイアウトを使うときは、初回だけ ELK のバンドルを作る (Node.js と npm が必要。
+  ネットワークを使うのはこのときだけ)。下の「Mermaid の ELK レイアウト」を参照:
+
+```bash
+uv run <skill>/scripts/md2html.py setup --elk        # Chromium と ELK
+uv run <skill>/scripts/md2html.py setup --elk-only   # ELK だけ
+```
+
 ## 手順 (Agent が守ること)
 
 1. `import --dry-run` でページ数と警告を確認し、利用者に見せる。
@@ -92,6 +100,49 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 `references/layout_rules.md`、ファイル形式は `references/gospelo-document.schema.json`
 (エンベロープ) と `references/layout.schema.json` (`--layout` に渡すレイアウト JSON)。
 
+## Mermaid の ELK レイアウト
+
+mermaid ブロックで ELK を指定すると、測るとき (`import`) も最終の出力 (`build`、HTML と PDF) も
+ELK で描く。指定の書き方は次のどれか:
+
+````markdown
+```mermaid
+%%{init: {"layout": "elk"}}%%
+flowchart TD
+  A --> B
+```
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+  A --> B
+```
+
+```mermaid
+flowchart-elk TD
+  A --> B
+```
+````
+
+- 使える名前は `elk` (elk.layered)、`elk.stress`、`elk.force`、`elk.mrtree`、`elk.sporeOverlap`。
+- 使う版は @mermaid-js/layout-elk **0.2.0** (elkjs 0.9.3)。同梱の Mermaid 11.12.2 と組にしてある
+  (`scripts/md2html/assets.py` の `MERMAID_LAYOUT_ELK`)。
+- バンドルはリポジトリに含めない (elkjs は EPL-2.0)。`setup --elk` が
+  `references/vendor/mermaid-layout-elk/build/` の手順 (版を固定した `package.json`) で、利用者の
+  キャッシュ `${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html/mermaid-layout-elk/0.2.0/` に作る
+  (環境変数 `GOSPELO_MD2HTML_CACHE_DIR` で `gospelo-md2html/` の場所を変えられる)。
+- フォールバックはしない。ELK を指定したのにバンドルがない、読み込めない、または上の名前以外の
+  `elk*` を指定した場合は、既定 (dagre) で描かずにエラーで止まる (終了コード 1)。
+  バンドルがないときは `setup --elk` を実行する。
+- ELK を指定していない図の描かれ方は変わらない。出力にも ELK は入らない。
+- 既定の `prerender` の出力には、ELK で描いた SVG だけが入る (elkjs は入らない)。`embed` / `link`
+  では、ELK を指定した図があるときだけ、ELK のバンドルとそのライセンス (EPL-2.0 を含む) が HTML に
+  入る (`link` は `mermaid-layout-elk-0.2.0.min.js` を出力の横に写す)。そうした HTML を配るときは、
+  `THIRD_PARTY_NOTICES.md` を参照。
+
 ## 警告への対処
 
 | 警告 | 対処 |
@@ -101,6 +152,8 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 | block ... taller than a page | 1 ブロックがページに入らない (表の 1 行が巨大など)。内容の構造を見直す提案をする |
 | droppedDetails | `<details>` を捨てた。本文として必要なら `--details expand` |
 | verification did not converge (終了コード 2) | 3 回送っても収まらない。レポートのページを利用者に示す |
+| the layout-elk ... bundle is not built | ELK を指定した図がある。`setup --elk` を実行してから同じコマンドをやり直す |
+| diagram requests layout ..., which is not an ELK layout | `layout:` の名前の誤り。上の ELK の名前に直す |
 | no gospelo-document envelope found | 0.2 より前の出力。`extract_markdown.py` で原文を取り出して `import` し直す |
 
 ## 終了コード

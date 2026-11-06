@@ -43,6 +43,8 @@ dist/
 build/
 # the Shiki bundle's build recipe is source, not output (its own .gitignore drops node_modules)
 !skills/claude/gospelo-md2html/references/vendor/shiki/build/
+# same for the Mermaid ELK layout recipe; its bundle is built by `setup --elk` into the user cache
+!skills/claude/gospelo-md2html/references/vendor/mermaid-layout-elk/build/
 *.egg-info/
 
 # md2html temporary measurement files (only left behind with MD2HTML_KEEP_TEMP=1)

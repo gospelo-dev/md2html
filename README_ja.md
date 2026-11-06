@@ -45,8 +45,9 @@ English version: [README.md](./README.md)
 | [uv](https://docs.astral.sh/uv/) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | Python 3.10+、markdown-it-py、Playwright | スクリプト先頭のインラインメタデータから `uv run` が自動で解決 (`pip` も venv も不要) |
 | Chromium | 初回のみ `uv run <skill>/scripts/md2html.py setup` |
+| Mermaid の ELK レイアウト (任意) | 初回のみ。Node.js と npm が必要: `uv run <skill>/scripts/md2html.py setup --elk` |
 
-Mermaid.js、Shiki (シンタックスハイライト)、Font Awesome Free はスキルに同梱しており、実行時のダウンロードはありません。
+Mermaid.js、Shiki (シンタックスハイライト)、Font Awesome Free はスキルに同梱しており、実行時のダウンロードはありません。Mermaid の ELK レイアウト (`layout: elk`) は同梱しません (elkjs が EPL-2.0 のため)。`setup --elk` が、スキルにある版を固定した手順から、利用者のキャッシュに 1 回だけ作ります ([THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) 参照)。
 
 ## 使い方
 
@@ -238,7 +239,7 @@ md2html/
 │   │           ├── layout_rules.md      # ページ区切りの規則
 │   │           ├── editing_guide.md     # エージェントがエンベロープを編集する手順
 │   │           ├── color-scheme.md      # ドキュメントの図で使う Mermaid の配色
-│   │           └── vendor/              # Mermaid.js (版別)、Shiki、Font Awesome Free、BIZ UD フォント (THIRD_PARTY_NOTICES.md 参照)
+│   │           └── vendor/              # Mermaid.js (版別)、Shiki、Font Awesome Free、BIZ UD フォント、ELK のビルド手順 (THIRD_PARTY_NOTICES.md 参照)
 │   └── opencode/README.md               # OpenCode から同じスキルを使う方法
 ├── tests/                               # pytest: ページ割りと 2 段組、インライン分割、エンベロープ入出力、移行、
 │                                        # Mermaid 同梱と prerender、PPTX 出力、フォント、kumihan (ゴールデン SVG)

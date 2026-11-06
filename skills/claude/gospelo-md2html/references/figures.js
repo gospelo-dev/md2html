@@ -251,10 +251,49 @@
     fig.dataset.figureR = String(SPLIT_FIGURE_R);
   }
 
+  /* ---- ELK layout: register, never fall back ----
+   * Mermaid draws a diagram whose layout is not registered with dagre and only
+   * logs a warning. Here an ELK request either renders with ELK or fails:
+   * with the vendored bundle its layouts are registered; without it, every
+   * ELK name gets a loader that throws; and an elk* name that is registered
+   * by neither is rejected before rendering. */
+  var ELK_LAYOUT_NAMES = ["elk", "elk.stress", "elk.force", "elk.mrtree", "elk.sporeOverlap"];
+  var ELK_REQUEST_RE = /^\s*flowchart-elk\b|["']?\b(?:layout|defaultRenderer)["']?\s*:\s*["']?(elk[\w.]*)/m;
+
+  function registerElk(nodes) {
+    var bundle = window.__mermaidLayoutElk;
+    var tag = document.querySelector("script[data-mermaid-layout-elk-version]");
+    var names;
+    if (bundle) {
+      var expected = tag && tag.getAttribute("data-mermaid-layout-elk-version");
+      if (expected && bundle.version !== expected) {
+        throw new Error("ELK layout bundle reports " + bundle.version + ", expected " + expected);
+      }
+      window.mermaid.registerLayoutLoaders(bundle.layouts);
+      names = bundle.layouts.map(function (l) { return l.name; });
+    } else {
+      var why = tag ? "the ELK layout bundle failed to load" : "the ELK layout bundle is not included";
+      window.mermaid.registerLayoutLoaders(ELK_LAYOUT_NAMES.map(function (name) {
+        return { name: name, loader: function () {
+          return Promise.reject(new Error("diagram requests layout " + name + ", but " + why));
+        } };
+      }));
+      names = ELK_LAYOUT_NAMES;
+    }
+    for (var i = 0; i < nodes.length; i++) {
+      var m = ELK_REQUEST_RE.exec(nodes[i].textContent || "");
+      var name = m && (m[1] || "elk");
+      if (name && names.indexOf(name) < 0) {
+        throw new Error("diagram requests layout " + name + ", which is not an ELK layout (" + names.join(", ") + ")");
+      }
+    }
+  }
+
   try {
     var mermaidNodes = document.querySelectorAll("pre.mermaid");
     if (mermaidNodes.length > 0) {
       if (!window.mermaid) { throw new Error("mermaid library is not loaded"); }
+      registerElk(mermaidNodes);
       window.mermaid.initialize({
         startOnLoad: false,
         theme: "base",

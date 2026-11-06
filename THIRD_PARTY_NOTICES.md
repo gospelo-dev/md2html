@@ -4,7 +4,9 @@ This repository vendors the following third-party assets under
 `skills/claude/gospelo-md2html/references/vendor/`. They are redistributed
 unmodified (except that the Font Awesome CSS font URL is rewritten to a data
 URI at HTML generation time), apart from Shiki, which is a bundle built from
-the unmodified npm packages (see below).
+the unmodified npm packages (see below). The Mermaid ELK layout is not
+vendored: the repository carries only its build recipe, and each user builds
+the bundle on their own machine (see below).
 
 | Asset | Version | License | Source |
 | --- | --- | --- | --- |
@@ -39,6 +41,41 @@ To add a version: create `mermaid/<version>/`, copy the unmodified
 and add a row to the table above. The directory name must match the version
 string inside the bundle; the tool checks this.
 
+## Mermaid ELK layout
+
+Diagrams that ask for the ELK layout (`layout: elk` in front matter or an
+`%%{init}%%` directive, or `flowchart-elk`) are laid out by
+`@mermaid-js/layout-elk` (MIT), which runs elkjs (the Eclipse Layout Kernel
+compiled to JavaScript, **EPL-2.0**), plus d3-shape and d3-path (ISC).
+
+| Package | Version | License | Source |
+| --- | --- | --- | --- |
+| @mermaid-js/layout-elk | 0.2.0 | MIT (Copyright (c) 2014 - 2022 Knut Sveidqvist) | https://github.com/mermaid-js/mermaid |
+| elkjs | 0.9.3 | EPL-2.0 | https://github.com/kieler/elkjs |
+| d3-shape, d3-path | as resolved by npm (d3 ^7.9.0) | ISC (Copyright Mike Bostock) | https://github.com/d3 |
+
+None of these is in the repository. `references/vendor/mermaid-layout-elk/build/`
+holds only the recipe (`entry.mjs`, and `package.json` pinning layout-elk,
+elkjs and esbuild). `md2html.py setup --elk` copies it to a temporary
+directory, runs `npm install --ignore-scripts` and esbuild there, and writes
+`mermaid-layout-elk.min.js` (one IIFE exposing `window.__mermaidLayoutElk`)
+with `LICENSE.txt` (the license texts of the four packages, taken from the
+installed packages) into the user cache,
+`${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html/mermaid-layout-elk/<version>/`.
+figures.js registers the layouts with `mermaid.registerLayoutLoaders()`. The
+layout-elk version is paired with each vendored Mermaid version in
+`MERMAID_LAYOUT_ELK` (`scripts/md2html/assets.py`): 0.2.0 is the layout-elk
+release that was current when Mermaid 11.12.2 was released.
+
+Since the repository does not contain elkjs, publishing it does not distribute
+elkjs. A generated document contains elkjs only in `embed` / `link` mode and
+only when one of its diagrams asks for ELK; whoever passes such a document on
+distributes elkjs in object form. The EPL-2.0 then requires the license text
+and a statement of where the source code is available
+(https://github.com/kieler/elkjs); the tool writes both in front of the bundle
+(see below). In the default `prerender` mode the document holds only the SVG
+that ELK laid out, which is output of the program and not covered by the EPL.
+
 ## Shiki: build-only syntax highlighter
 
 Shiki colours code blocks that name a language. Like Mermaid in `prerender`
@@ -69,6 +106,12 @@ in those cases carry the licenses' attribution requirements:
   and the full MIT permission notice immediately before the library, in both
   `embed` and `link` mode. In `link` mode it also copies
   `LICENSE.mermaid-<version>.txt` next to `mermaid-<version>.min.js`.
+- Mermaid ELK layout (only when a diagram asks for ELK): the tool writes an
+  HTML comment with the version and the full `LICENSE.txt` (MIT, EPL-2.0 with
+  the elkjs source location, ISC) immediately before the bundle. In `link`
+  mode it also copies `LICENSE.mermaid-layout-elk-<version>.txt` next to
+  `mermaid-layout-elk-<version>.min.js`. In `prerender` mode only the drawn SVG
+  is in the document.
 - Font Awesome: the CSS header comment (license summary and copyright) is kept
   in the embedded stylesheet.
 

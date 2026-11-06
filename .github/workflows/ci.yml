@@ -48,6 +48,24 @@ jobs:
           done
       - name: Rebuild a generated document in place
         run: uv run "$MD2HTML" build out/code-16x9.gospelo.html
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the Mermaid ELK layout bundle (user cache, not committed)
+        run: uv run "$MD2HTML" setup --elk-only
+      - name: Import the ELK fixture; the ELK library is not shipped in prerender mode
+        run: |
+          uv run "$MD2HTML" import tests/fixtures/elk_flowchart.md --page a4 -o out/elk-a4.gospelo.html --force
+          # figures.js names the attribute in a selector; the tag itself has `=`
+          if grep -q -e 'data-mermaid-layout-elk-version=' -e 'window.__mermaidLayoutElk=' out/elk-a4.gospelo.html; then
+            echo "ELK bundle was shipped"; exit 1
+          fi
+      - name: ELK tests with Chromium and the built bundle (nothing may be skipped)
+        run: |
+          uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright \
+            --with python-pptx --with pillow --with brotli --with fonttools \
+            pytest tests/test_mermaid_elk.py -q -rs | tee elk-tests.txt
+          if grep -q SKIPPED elk-tests.txt; then echo "ELK tests were skipped"; exit 1; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

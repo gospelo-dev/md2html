@@ -280,14 +280,18 @@ def _font_vars(layout: Layout) -> str:
     return ":root {\n" + "\n".join(lines) + "\n}\n" if lines else ""
 
 
-def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, needs_shiki: bool, out_dir: Path | None) -> list[str]:
+def _tail_scripts(ctx: RenderContext, needs_mermaid: bool, needs_shiki: bool, out_dir: Path | None,
+                  needs_elk: bool = False) -> list[str]:
     """Large static assets go last: the Mermaid library (when the document has
-    diagrams), Shiki (when code blocks have a language), and figures.js.
+    diagrams), the ELK layout (when a diagram asks for it), Shiki (when code
+    blocks have a language), and figures.js.
     out_dir=None means a temporary (measurement) document: always embed."""
     parts = []
     if needs_mermaid:
         lib_mode = "embed" if out_dir is None or ctx.layout.mermaid_lib == "prerender" else ctx.layout.mermaid_lib
         parts.append(assets.mermaid_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
+        if needs_elk:
+            parts.append(assets.elk_script_tag(lib_mode, out_dir, ctx.layout.mermaid_version))
     if needs_shiki:
         tag = assets.shiki_script_tag()
         if tag:
@@ -316,6 +320,12 @@ def _needs(blocks: list[dict[str, Any]], svgs: dict[str, str] | None = None,
     return bool(pending), needs_fa, needs_shiki
 
 
+def _needs_elk(blocks: list[dict[str, Any]], svgs: dict[str, str] | None = None) -> bool:
+    """A Mermaid block still to be rendered in the browser asks for ELK."""
+    return any(b["type"] == "mermaid" and not (svgs and b.get("id") in svgs)
+               and assets.mermaid_requests_elk(b["source"]) for b in blocks)
+
+
 def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: RenderContext,
                     date_text: str | None) -> str:
     title = doc["meta"]["title"]
@@ -335,7 +345,7 @@ def render_document(doc: dict[str, Any], pages: list[dict[str, Any]], ctx: Rende
     total = len(pages)
     for i, page in enumerate(pages, start=1):
         body.append(render_page(page, ctx, i, total, title, date_text))
-    body += _tail_scripts(ctx, needs_mermaid, needs_shiki, ctx.html_dir)
+    body += _tail_scripts(ctx, needs_mermaid, needs_shiki, ctx.html_dir, _needs_elk(all_blocks, ctx.svgs))
     body.append(assets.page_number_script())
     body.append("</body></html>")
     return head + "\n" + "\n".join(body)
@@ -358,6 +368,6 @@ def render_measure_document(blocks: list[dict[str, Any]], ctx: RenderContext) ->
         for b in blocks:
             body.append(render_block(b, ctx, fig_mode))
         body.append("</div>")
-    body += _tail_scripts(ctx, needs_mermaid, needs_shiki, None)
+    body += _tail_scripts(ctx, needs_mermaid, needs_shiki, None, _needs_elk(blocks))
     body.append("</body></html>")
     return head + "\n" + "\n".join(body)

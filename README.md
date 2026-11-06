@@ -254,7 +254,7 @@ md2html/
 Run the tests the way CI does:
 
 ```bash
-uv run --python 3.13.1 \
+uv run --python 3.14.9 \
   --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright \
   --with python-pptx --with pillow --with brotli \
   --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py \

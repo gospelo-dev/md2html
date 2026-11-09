@@ -48,7 +48,7 @@ Supported platforms: **macOS / Linux / WSL2**
 | npm packages and chrome-headless-shell | one-time: `uv run <skill>/scripts/md2html.py setup` (runs `npm ci --omit=dev`, then installs the chrome-headless-shell version puppeteer-core expects into puppeteer's cache) |
 | AWS Architecture Icons zip (only for `aws:` icons) | download `Icon-package_*.zip` from https://aws.amazon.com/architecture/icons/ and pass it with `--icons-zip` |
 
-mermaid-arch (with Mermaid 12 and Font Awesome Free), Shiki (syntax highlighting) and the BIZ UD fonts are vendored in the skill; the npm packages are installed once by `setup`, and nothing else is downloaded at run time. The browser is taken from `--chrome PATH`, then `CHROME_PATH`, then `PUPPETEER_EXECUTABLE_PATH`, then puppeteer's cache.
+mermaid-arch (with Font Awesome Free), Shiki (syntax highlighting) and the BIZ UD fonts are vendored in the skill. Mermaid 12 is not: its bundle includes elkjs (EPL-2.0), which this repository does not carry, so `setup` installs it from the npm registry together with the other npm packages, once; nothing else is downloaded at run time (see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)). The browser is taken from `--chrome PATH`, then `CHROME_PATH`, then `PUPPETEER_EXECUTABLE_PATH`, then puppeteer's cache.
 
 ## Usage example
 
@@ -198,7 +198,7 @@ python $INSTALL --user --symlink             # development: symlink back to this
 python $INSTALL --project /path/to/repo --force
 ```
 
-Then, once per installed copy: `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup`. The installer does not copy `node_modules`; `setup` installs the npm packages from the bundled `package-lock.json` (mermaid-arch comes from the tarball in the skill's `vendor/`, so no GitHub access is needed) and chrome-headless-shell.
+Then, once per installed copy: `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup`. The installer does not copy `node_modules`; `setup` installs the npm packages from the bundled `package-lock.json` (mermaid-arch comes from the tarball in the skill's `vendor/`, so no GitHub access is needed; Mermaid 12.3.0 comes from the public npm registry) and chrome-headless-shell.
 
 Agents discover the skill via [SKILL.md](./skills/claude/gospelo-md2html/SKILL.md) and trigger it when you say things like *"convert this Markdown to A4 PDF"*, *"make slides from this doc"*, or *"add a row to the table on page 5"*. SKILL.md tells the agent to dry-run first, edit only the JSON, check capacity before building, and screenshot the result before reporting.
 

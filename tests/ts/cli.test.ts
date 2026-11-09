@@ -90,7 +90,24 @@ test('a document paginated with Mermaid 11 is stopped, and the suggested option 
   assert.equal(md2html('build', html, '--mermaid-version', fix[1]!).code, 0)
 })
 
+test('the ELK fixture draws every way of asking for ELK, and an unknown layout stops', () => {
+  const dir = tmp()
+  const html = join(dir, 'elk.gospelo.html')
+  let r = md2html('import', join(import.meta.dirname, '..', 'fixtures', 'elk_flowchart.md'), '-o', html)
+  assert.equal(r.code, 0, r.out)
+  const text = readFileSync(html, 'utf-8')
+  for (let n = 1; n <= 5; n++) assert.ok(text.includes(`<svg id="md2html-mermaid-${n}"`), `diagram ${n}`)
+  const md = join(dir, 'bad.md')
+  writeFileSync(md, '# B\n\n```mermaid\n---\nconfig:\n  layout: elk.bogus\n---\nflowchart TD\n  A --> B\n```\n')
+  r = md2html('import', md)
+  assert.equal(r.code, 1)
+  assert.match(r.out, /asks for layout 'elk\.bogus'.*dagre instead/)
+})
+
 test('usage errors exit with 2', () => {
+  const elk = md2html('setup', '--elk')
+  assert.equal(elk.code, 2)
+  assert.match(elk.out, /no longer needed: Mermaid 12 includes the ELK layout/)
   assert.equal(md2html('import').code, 2)
   assert.equal(md2html('build', 'x.html', '--page', 'b5').code, 2)
   assert.equal(md2html('nonsense').code, 2)

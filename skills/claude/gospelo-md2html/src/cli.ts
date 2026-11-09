@@ -20,7 +20,7 @@ import { embeddedFontCss } from './fonts.ts'
 import { getFormat, PAGE_IDS } from './formats.ts'
 import { buildLayout, type Layout, LayoutError, type LayoutValues } from './layout.ts'
 import { Browser, MeasureError, measureDocument, verifyDocument } from './measure.ts'
-import { DiagramError, Diagrams } from './mermaid.ts'
+import { DiagramError, Diagrams, LayoutRequestError } from './mermaid.ts'
 import {
   BlockHeight,
   flattenForReflow,
@@ -190,6 +190,11 @@ function parse(argv: string[]): Args {
   }
   const c = COMMANDS[command]
   if (!c) throw new UsageError(`unknown command '${command}' (choose from ${Object.keys(COMMANDS).join(', ')})`)
+  if (command === 'setup' && rest.some((a) => a === '--elk' || a === '--elk-only')) {
+    throw new UsageError(
+      'setup --elk / --elk-only is no longer needed: Mermaid 12 includes the ELK layout. Run setup without options',
+    )
+  }
   if (rest.includes('-h') || rest.includes('--help')) {
     console.log(usage(command))
     process.exit(EXIT_OK)
@@ -921,6 +926,7 @@ export async function main(argv: string[]): Promise<number> {
       e instanceof assets.AssetError ||
       e instanceof MeasureError ||
       e instanceof RenderError ||
+      e instanceof LayoutRequestError ||
       e instanceof RangeError
     ) {
       console.error(`error: ${e.message}`)

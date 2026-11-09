@@ -12,7 +12,7 @@ import { BuildError as BuildError2, puppeteerCacheDir, resolveChrome, SHELL_VERS
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fontAwesome, vendoredMermaid } from "@gospelo/mermaid-arch";
+import { fontAwesome, installedMermaid } from "@gospelo/mermaid-arch";
 var SKILL_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 var REFERENCES = join(SKILL_DIR, "references");
 var VENDOR = join(REFERENCES, "vendor");
@@ -45,7 +45,7 @@ function compareVersions(a, b) {
   return 0;
 }
 function mermaidVersion() {
-  return vendoredMermaid().version;
+  return installedMermaid().version;
 }
 function shikiVersions() {
   if (!existsSync(SHIKI_DIR)) return [];
@@ -1698,6 +1698,50 @@ Diagrams are the document's mermaid blocks, in order:
 ${map}`;
   }
 };
+var MERMAID_LAYOUTS = [
+  "dagre",
+  "swimlane",
+  "cose-bilkent",
+  "elk",
+  "elk.stress",
+  "elk.force",
+  "elk.mrtree",
+  "elk.sporeOverlap",
+  "elk.box",
+  "elk.rectpacking"
+];
+var FRONT_MATTER_RE = /^\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+var DIRECTIVE_RE = /%%\{([\s\S]*?)\}%%/g;
+var LAYOUT_KEY_RE = /["']?\b(layout|defaultRenderer)["']?\s*:\s*["']?([\w.-]+)/g;
+var FLOWCHART_ELK_RE = /^\s*flowchart-elk\b/m;
+function requestedLayouts(source) {
+  const parts = [];
+  const fm = FRONT_MATTER_RE.exec(source);
+  if (fm) parts.push(fm[1]);
+  for (const m of source.matchAll(DIRECTIVE_RE)) parts.push(m[1]);
+  const names = [];
+  for (const part of parts) for (const m of part.matchAll(LAYOUT_KEY_RE)) names.push(m[2]);
+  const body = fm ? source.slice(fm[0].length) : source;
+  if (FLOWCHART_ELK_RE.test(body.replace(DIRECTIVE_RE, ""))) names.push("elk");
+  return names;
+}
+var LayoutRequestError = class extends Error {
+};
+function checkLayouts(blocks, mermaidVersion2) {
+  const known = new Set(MERMAID_LAYOUTS);
+  const bad = [];
+  for (const b of blocks) {
+    if (b.type !== "mermaid") continue;
+    for (const name of requestedLayouts(b.source)) {
+      if (!known.has(name)) bad.push(`block ${b.id} asks for layout '${name}'`);
+    }
+  }
+  if (bad.length) {
+    throw new LayoutRequestError(
+      `${bad.join("; ")}, which Mermaid ${mermaidVersion2} does not have; Mermaid would draw it with dagre instead. Use one of: ${MERMAID_LAYOUTS.join(", ")}`
+    );
+  }
+}
 var Diagrams = class {
   renderer = null;
   /** source -> SVGs drawn for its occurrences, in document order */
@@ -1740,6 +1784,7 @@ var Diagrams = class {
         fontAwesome: this.options.fontAwesome
       });
     }
+    checkLayouts(mermaid, mermaidVersion());
     let images;
     try {
       ;
@@ -3127,6 +3172,11 @@ function parse(argv) {
   }
   const c = COMMANDS[command];
   if (!c) throw new UsageError(`unknown command '${command}' (choose from ${Object.keys(COMMANDS).join(", ")})`);
+  if (command === "setup" && rest.some((a) => a === "--elk" || a === "--elk-only")) {
+    throw new UsageError(
+      "setup --elk / --elk-only is no longer needed: Mermaid 12 includes the ELK layout. Run setup without options"
+    );
+  }
   if (rest.includes("-h") || rest.includes("--help")) {
     console.log(usage(command));
     process.exit(EXIT_OK);
@@ -3722,7 +3772,7 @@ md2html: error: ${e.message}`);
       console.error(`error: ${e.text()}`);
       return EXIT_ERROR;
     }
-    if (e instanceof CliError || e instanceof LayoutError || e instanceof ContentError || e instanceof AssetError || e instanceof MeasureError || e instanceof RenderError || e instanceof RangeError) {
+    if (e instanceof CliError || e instanceof LayoutError || e instanceof ContentError || e instanceof AssetError || e instanceof MeasureError || e instanceof RenderError || e instanceof LayoutRequestError || e instanceof RangeError) {
       console.error(`error: ${e.message}`);
       return e.message.includes("did not converge") ? EXIT_NOT_CONVERGED : EXIT_ERROR;
     }

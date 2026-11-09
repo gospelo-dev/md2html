@@ -2,8 +2,18 @@
 // version mermaid-arch draws with, and the drawn SVG is what the document gets
 // (replaces tests/test_prerender.py and tests/test_mermaid_vendor.py).
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { mermaidVersion } from '../../skills/claude/gospelo-md2html/src/assets.ts'
+import {
+  checkLayouts,
+  LayoutRequestError,
+  MERMAID_LAYOUTS,
+  requestedLayouts,
+} from '../../skills/claude/gospelo-md2html/src/mermaid.ts'
+import { SKILL } from './helpers.ts'
 import { Layout, LayoutError, layoutToDict } from '../../skills/claude/gospelo-md2html/src/layout.ts'
 import { effectiveLayout, RenderError, renderDocument } from '../../skills/claude/gospelo-md2html/src/render.ts'
 import { ctxFor, layoutOf, sampleDoc } from './helpers.ts'
@@ -67,4 +77,39 @@ test('Font Awesome is added only for fa: labels', () => {
   const [doc2, page2] = sampleDoc(blocks)
   const html2 = renderDocument(doc2, [page2], ctxFor(layoutOf(), { svgs: new Map([['p01-b1', svg]]) }), null)
   assert.ok(!html2.includes('Font Awesome'))
+})
+
+// --- layout names ---------------------------------------------------------------
+
+const BODY = 'flowchart TD\n  A --> B'
+
+test('requested layouts are read from front matter, directives and flowchart-elk only', () => {
+  assert.deepEqual(requestedLayouts(BODY), [])
+  assert.deepEqual(requestedLayouts(`---\nconfig:\n  layout: elk.stress\n---\n${BODY}`), ['elk.stress'])
+  assert.deepEqual(requestedLayouts(`%%{init: {"layout": "elk"}}%%\n${BODY}`), ['elk'])
+  assert.deepEqual(requestedLayouts(`%%{init: {"flowchart": {"defaultRenderer": "dagre"}}}%%\n${BODY}`), ['dagre'])
+  assert.deepEqual(requestedLayouts('flowchart-elk TD\n  A --> B'), ['elk'])
+  // a label that reads like a request is not one
+  assert.deepEqual(requestedLayouts('flowchart TD\n  A["layout: elk.bogus"] --> B'), [])
+})
+
+test('an unknown layout stops before drawing; known ones pass', () => {
+  const block = (id: string, source: string) => ({ id, type: 'mermaid', source })
+  checkLayouts([block('b1', `---\nconfig:\n  layout: elk.mrtree\n---\n${BODY}`), block('b2', 'flowchart-elk TD\n  A --> B')], '12.3.0')
+  assert.throws(
+    () => checkLayouts([block('b3', `---\nconfig:\n  layout: elk.bogus\n---\n${BODY}`)], '12.3.0'),
+    (e: Error) =>
+      e instanceof LayoutRequestError && e.message.includes("block b3 asks for layout 'elk.bogus'") && e.message.includes('dagre instead'),
+  )
+})
+
+test('the known layouts are exactly the ones the installed Mermaid registers', () => {
+  const req = createRequire(join(SKILL, 'package.json'))
+  const bundle = readFileSync(join(req.resolve('mermaid/package.json'), '..', 'dist', 'mermaid.min.js'), 'utf-8')
+  // registerLayoutLoaders([{name:"dagre",loader:...}, ...]); ELK adds "elk" and a list of algorithm names
+  const loaders = [...new Set([...bundle.matchAll(/\{name:"([\w.-]+)",loader:/g)].map((m) => m[1]!))]
+  const elkList = /=\["(elk\.[^\]]+)"\]/.exec(bundle.slice(bundle.indexOf('"elk.stress"') - 40))
+  assert.ok(elkList, 'the ELK algorithm list was not found in mermaid.min.js')
+  const elkNames = elkList[1]!.split('","')
+  assert.deepEqual([...loaders, ...elkNames].sort(), [...MERMAID_LAYOUTS].sort())
 })

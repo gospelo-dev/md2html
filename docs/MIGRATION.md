@@ -61,7 +61,7 @@ Check the result before handing it on: Mermaid 12 lays flowcharts out with ELK u
 
 Other differences:
 
-- Setup: Node.js 22.12 or later is required. `uv run <skill>/scripts/md2html.py setup` installs the npm packages and chrome-headless-shell (instead of Playwright's Chromium). `scripts/md2html.py` still takes the same subcommands and options.
+- Setup: Node.js 22.12 or later is required. `uv run <skill>/scripts/md2html.py setup` installs the npm packages and chrome-headless-shell (instead of Playwright's Chromium). `scripts/md2html.py` still takes the same subcommands and options, except `setup --elk` / `--elk-only`: Mermaid 12 (installed from npm by `setup`) includes ELK, so there is no separate ELK bundle to build. Diagrams that ask for `layout: elk` (or another ELK name) keep working; an unknown layout name still stops the build instead of falling back to dagre.
 - Diagrams with AWS icons are new (`--icons-zip <path to Icon-package_*.zip>`).
 - A link inside a paragraph that was split across pages now keeps its URL; the Python releases wrote `[text]()` for it. Rebuilding a document whose envelope already contains such an empty link does not restore the URL; fix the text in the envelope, or re-import from the Markdown.
 - `fa:` icons in diagram labels now embed Font Awesome Free with all its styles (about 0.5 MB instead of about 0.2 MB).

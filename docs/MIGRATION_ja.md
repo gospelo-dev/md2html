@@ -61,7 +61,7 @@ Gospelo Document は常に Markdown から生成する。ツールがこれま�
 
 その他の違い:
 
-- 準備: Node.js 22.12 以上が必要。`uv run <skill>/scripts/md2html.py setup` が npm パッケージと chrome-headless-shell を入れる (Playwright の Chromium の代わり)。`scripts/md2html.py` のサブコマンドとオプションは同じ。
+- 準備: Node.js 22.12 以上が必要。`uv run <skill>/scripts/md2html.py setup` が npm パッケージと chrome-headless-shell を入れる (Playwright の Chromium の代わり)。`scripts/md2html.py` のサブコマンドとオプションは同じ。ただし `setup --elk` / `--elk-only` はなくなった。`setup` が npm から入れる Mermaid 12 が ELK を含むので、ELK のバンドルを別に作る必要がない。`layout: elk` (ほかの ELK の名前も) を指定した図はそのまま描ける。知らない layout の名前は、今までどおり dagre で描かずにエラーで止まる。
 - AWS アイコンを使う図に対応した (`--icons-zip <path to Icon-package_*.zip>`)。
 - ページをまたいで分けた段落の中のリンクが URL を保つようになった。Python 版は `[text]()` と書いていた。エンベロープにすでに空のリンクが入っている文書は、作り直しても URL は戻らない。エンベロープの本文を直すか、Markdown から import し直す。
 - 図のラベルの `fa:` アイコンには、Font Awesome Free を全スタイル埋め込む (約 0.2 MB から約 0.5 MB)。

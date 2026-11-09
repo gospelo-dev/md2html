@@ -91,8 +91,7 @@ uv run $S import  INPUT.md --page 16x9 --icons-zip "<path to Icon-package_*.zip>
 python <skill>/scripts/extract_markdown.py old.html -o original.md   # 旧形式からの移行
 ```
 
-Mermaid 図は Mermaid 12 で描く。flowchart は何も指定しないと elk で並ぶ。以前の並び方が
-よい図は、図の先頭の front matter で `layout: dagre` を指定する。AWS アイコンは
+Mermaid 図は Mermaid 12 で描く。AWS アイコンは
 `fn@{ icon: "aws:lambda", form: "square", label: "Handler" }` (flowchart) や
 `service fn(aws:lambda)[Handler]` (architecture-beta) の形で書く。図のラベルに `fa:fa-user`
 のような Font Awesome のアイコンがあると、Font Awesome Free を HTML に埋め込む。
@@ -116,6 +115,45 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 `references/layout_rules.md`、ファイル形式は `references/gospelo-document.schema.json`
 (エンベロープ) と `references/layout.schema.json` (`--layout` に渡すレイアウト JSON)。
 
+## Mermaid の配置 (ELK と dagre)
+
+Mermaid 12 は ELK を含むので、ELK を使うための準備は要らない (Python 版の `setup --elk` は
+なくなった)。flowchart は何も指定しないと ELK (`elk`) で並ぶ。図ごとに指定するときの書き方は
+次のどれか:
+
+````markdown
+```mermaid
+%%{init: {"layout": "elk"}}%%
+flowchart TD
+  A --> B
+```
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TD
+  A --> B
+```
+
+```mermaid
+flowchart-elk TD
+  A --> B
+```
+````
+
+- 使える名前は `dagre`、`swimlane`、`cose-bilkent`、`elk` (elk.layered)、`elk.stress`、
+  `elk.force`、`elk.mrtree`、`elk.sporeOverlap`、`elk.box`、`elk.rectpacking`
+  (Mermaid 12.3.0 が登録している名前)。Python 版 (Mermaid 11 の dagre) の並び方にしたい図は
+  `layout: dagre` を書く。
+- フォールバックはしない。Mermaid は知らない名前を黙って dagre で描くので、md2html は描く前に
+  front matter と `%%{init}%%` の `layout` / `defaultRenderer` を確かめ、上の名前以外ならエラーで
+  止まる (終了コード 1)。
+- 出力には描いた SVG だけが入る。elkjs (EPL-2.0) は Mermaid 12 のバンドルの中にあり、`setup` が
+  npm から各自の `node_modules` に入れる。リポジトリにも出力にも elkjs は入らない
+  (`THIRD_PARTY_NOTICES.md`)。
+
 ## 警告への対処
 
 | 警告 | 対処 |
@@ -130,6 +168,8 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 | Mermaid cannot parse or draw this diagram | エラーの `diagram N = block <id>` で該当の図を特定し、Mermaid の書き方を直す |
 | paginated with Mermaid 11.12.2 | Python 版で作った文書。手順 12 のとおり利用者に確かめてから `--mermaid-version` を付ける |
 | chrome-missing | chrome-headless-shell がない。`setup` を実行するか、エラーに出たコマンドで入れる |
+| block ... asks for layout '...', which Mermaid ... does not have | `layout:` の名前の誤り。上の「Mermaid の配置」の名前に直す |
+| vendor-missing / vendor-mismatch (mermaid) | Mermaid 12.3.0 が入っていないか、版や中身が違う。`setup` を実行し直す |
 | no gospelo-document envelope found | 0.2 より前の出力。`extract_markdown.py` で原文を取り出して `import` し直す |
 
 ## 終了コード

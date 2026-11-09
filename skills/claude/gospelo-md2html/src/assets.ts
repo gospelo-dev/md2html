@@ -1,13 +1,14 @@
 // Browser-side assets: base CSS, figures.js, vendored Shiki, and Font Awesome
 // (from mermaid-arch). Missing vendor files are an error.
 //
-// Mermaid is not vendored here any more: diagrams are drawn by mermaid-arch
-// (which vendors its Mermaid) and written into the document as SVG.
+// Mermaid is not vendored: diagrams are drawn by mermaid-arch with the mermaid
+// package npm installs (its bundle contains elkjs, EPL-2.0, which is kept out of
+// the repository), and written into the document as SVG.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { fontAwesome, vendoredMermaid } from '@gospelo/mermaid-arch'
+import { fontAwesome, installedMermaid } from '@gospelo/mermaid-arch'
 
 // src/assets.ts and the bundled scripts/md2html.mjs both sit one level below the skill
 export const SKILL_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -52,9 +53,10 @@ function compareVersions(a: string, b: string): number {
 // --------------------------------------------------------------------------
 // Mermaid (drawn by mermaid-arch)
 
-/** The Mermaid version mermaid-arch draws with; documents record it as layout.mermaidVersion. */
+/** The Mermaid version mermaid-arch draws with (the installed mermaid package, checked
+ * by mermaid-arch); documents record it as layout.mermaidVersion. */
 export function mermaidVersion(): string {
-  return vendoredMermaid().version
+  return installedMermaid().version
 }
 
 // --------------------------------------------------------------------------

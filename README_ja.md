@@ -48,7 +48,7 @@ English version: [README.md](./README.md)
 | npm パッケージと chrome-headless-shell | 初回のみ `uv run <skill>/scripts/md2html.py setup` (`npm ci --omit=dev` の後、puppeteer-core が想定する版の chrome-headless-shell を puppeteer のキャッシュに入れる) |
 | AWS のアーキテクチャアイコンの zip (`aws:` アイコンを使う場合だけ) | https://aws.amazon.com/architecture/icons/ から `Icon-package_*.zip` を入手し、`--icons-zip` で渡す |
 
-mermaid-arch (Mermaid 12 と Font Awesome Free を含む)、Shiki (シンタックスハイライト)、BIZ UD フォントはスキルに同梱しています。npm パッケージは `setup` で 1 度だけ入れ、実行時のダウンロードはありません。ブラウザは `--chrome PATH`、`CHROME_PATH`、`PUPPETEER_EXECUTABLE_PATH`、puppeteer のキャッシュの順に探します。
+mermaid-arch (Font Awesome Free を含む)、Shiki (シンタックスハイライト)、BIZ UD フォントはスキルに同梱しています。Mermaid 12 は同梱しません。そのバンドルは elkjs (EPL-2.0) を含み、このリポジトリには elkjs を入れないためです。`setup` がほかの npm パッケージと一緒に npm のレジストリから 1 度だけ入れ、実行時のダウンロードはありません ([THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md))。ブラウザは `--chrome PATH`、`CHROME_PATH`、`PUPPETEER_EXECUTABLE_PATH`、puppeteer のキャッシュの順に探します。
 
 ## 使い方
 
@@ -197,7 +197,7 @@ python $INSTALL --user --symlink             # 開発用: このクローンへ�
 python $INSTALL --project /path/to/repo --force
 ```
 
-その後、インストールしたコピーごとに 1 回 `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup` を実行します。インストーラは `node_modules` をコピーしません。`setup` が同梱の `package-lock.json` から npm パッケージを入れ (mermaid-arch はスキルの `vendor/` にある tarball から入るので、GitHub へのアクセスは不要)、chrome-headless-shell も入れます。
+その後、インストールしたコピーごとに 1 回 `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup` を実行します。インストーラは `node_modules` をコピーしません。`setup` が同梱の `package-lock.json` から npm パッケージを入れ (mermaid-arch はスキルの `vendor/` にある tarball から入るので、GitHub へのアクセスは不要。Mermaid 12.3.0 は npm の公開レジストリから入る)、chrome-headless-shell も入れます。
 
 エージェントは [SKILL.md](./skills/claude/gospelo-md2html/SKILL.md) からスキルを見つけ、「この Markdown を A4 の PDF にして」「この文書をスライドにして」「5 ページ目の表に行を足して」のような指示で起動します。SKILL.md はエージェントに、まずドライラン、編集は JSON だけ、ビルド前に容量確認、完了報告前にスクリーンショット確認、という手順を守らせます。
 

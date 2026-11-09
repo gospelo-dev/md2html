@@ -50,7 +50,10 @@ def find_node() -> str | None:
     return node
 
 
-def setup(node: str) -> int:
+def setup(node: str, options: list[str]) -> int:
+    if options:
+        # md2html.mjs explains the options that are gone (setup --elk); stop before npm ci
+        return subprocess.run([node, str(BUNDLE), "setup", *options], check=False).returncode
     npm = shutil.which("npm")
     if npm is None:
         return fail("npm not found on PATH; it comes with Node.js")
@@ -68,7 +71,7 @@ def main(argv: list[str]) -> int:
     if not BUNDLE.is_file():
         return fail(f"{BUNDLE} is missing; the skill copy is incomplete")
     if argv[:1] == ["setup"]:
-        return setup(node)
+        return setup(node, argv[1:])
     if not MARKER.is_file():
         return fail(f"the npm packages are not installed in {SKILL_DIR}. Run: uv run {Path(__file__)} setup")
     return subprocess.run([node, str(BUNDLE), *argv], check=False).returncode

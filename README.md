@@ -1,6 +1,6 @@
 # gospelo-md2html
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-1E90FF.svg?style=flat)](./LICENSE) [![Python](https://img.shields.io/badge/Python-3.10+-1E90FF.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/) [![uv](https://img.shields.io/badge/run_with-uv-DE5FE9.svg?style=flat)](https://docs.astral.sh/uv/) [![Playwright](https://img.shields.io/badge/Playwright-Chromium-2EAD33.svg?style=flat&logo=playwright&logoColor=white)](https://playwright.dev/python/) [![Mermaid](https://img.shields.io/badge/Mermaid-11-FF3670.svg?style=flat&logo=mermaid&logoColor=white)](https://mermaid.js.org/) [![Agent Skill](https://img.shields.io/badge/Agent_Skill-Claude_Code,_Copilot,_Codex,_OpenCode-7B3FF2.svg?style=flat)](https://docs.claude.com/en/docs/claude-code/skills)
+[![License: MIT](https://img.shields.io/badge/License-MIT-1E90FF.svg?style=flat)](./LICENSE) [![Node.js](https://img.shields.io/badge/Node.js-22.12+-1E90FF.svg?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Puppeteer](https://img.shields.io/badge/Puppeteer-chrome--headless--shell-2EAD33.svg?style=flat&logo=puppeteer&logoColor=white)](https://pptr.dev/) [![Mermaid](https://img.shields.io/badge/Mermaid-12-FF3670.svg?style=flat&logo=mermaid&logoColor=white)](https://mermaid.js.org/) [![Agent Skill](https://img.shields.io/badge/Agent_Skill-Claude_Code,_Copilot,_Codex,_OpenCode-7B3FF2.svg?style=flat)](https://docs.claude.com/en/docs/claude-code/skills)
 
 <p align="center"><img src="https://github.com/gospelo-dev/md2html/blob/main/assets/hero.jpg?raw=true" alt="gospelo-md2html: Markdown + Mermaid to paginated slides and documents, editable JSON, original kept" width="820"></p>
 
@@ -10,11 +10,11 @@ Turn Markdown + Mermaid into **layout-aware, paginated slide decks and documents
 
 Most Markdown-to-PDF tools flow text into a browser's print engine and hope for the best: headings land at the bottom of a page, tables split anywhere, diagrams shrink or overflow, and once the HTML exists nobody can adjust a single page without regenerating everything. This skill is built around three things:
 
-1. **Layout-aware pagination.** `import` renders every block in headless Chromium to get real heights and paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, two columns on landscape paper) into 16:9 / 4:3 slides or A4 / A3 documents.
+1. **Layout-aware pagination.** `import` renders every block in headless Chrome (chrome-headless-shell) to get real heights and paginates with typographic rules (keep headings with their text, split tables at rows and repeat the header, two columns on landscape paper) into 16:9 / 4:3 slides or A4 / A3 documents.
 2. **Editable by an AI.** The output is one `.gospelo.html` (a **Gospelo Document**) whose content sits at the top of the file as JSON: one object per page, text as inline Markdown, tables as `header` + `rows`, Mermaid as source. An agent edits the page in question and runs `build` on that same file. Anything that no longer fits is spilled to a continuation page with the same title, and the JSON always matches the rendered pages.
 3. **The original is preserved.** The Markdown as imported is kept verbatim inside the file; `restore` gets it back at any time, and a fresh `import` from it undoes every edit.
 
-Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid diagrams are drawn during the build and written into the file as SVG, while their source stays in the envelope, so they remain editable and the file stays small (no 3 MB library inside).
+Layout never lives in the content: paper size, margins, font scale, column split and figure side come from CLI options or a separate layout JSON. Mermaid diagrams are drawn during the build by [mermaid-arch](https://github.com/gospelo-dev/mermaid-arch) (Mermaid 12, ELK layout, AWS architecture icons) and written into the file as SVG, while their source stays in the envelope, so they remain editable and the file stays small (no Mermaid library inside).
 
 New here? See the [Quickstart](./docs/QUICKSTART.md) ([日本語](./docs/QUICKSTART_ja.md)). The typographic rules and their sources are in [docs/DESIGN.md](./docs/DESIGN.md), the single-file design in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md), and the file format in [docs/spec/gospelo-document.md](./docs/spec/gospelo-document.md).
 
@@ -28,13 +28,14 @@ New here? See the [Quickstart](./docs/QUICKSTART.md) ([日本語](./docs/QUICKST
 | Two columns | Landscape formats flow blocks in column order (down the left column, then the right); wide tables and wide figures become full-width bands. Portrait formats are single column. `split` (one figure beside the text) is also available |
 | Code blocks | Syntax-highlighted with Shiki when the fence names a language (JSON, bash, YAML, Python, JS/TS, HTML, CSS, SQL, TOML, Markdown, diff, Dockerfile). Colors are written into the file as static markup; no highlighter is shipped. In two-column layouts code sits in one column at 0.6x body size, otherwise 0.85x |
 | Tall diagrams | A tall Mermaid flowchart that would shrink to unreadable size is cut between nodes and laid out as 2 to 4 side-by-side columns inside one SVG |
-| Real measurement | Heights are measured in Chromium (Playwright), never estimated; a verify pass checks every page for overflow |
+| Architecture diagrams | Diagrams can use AWS Architecture Icons (`fn@{ icon: "aws:lambda", form: "square", label: "Handler" }`, or `architecture-beta`) from your own AWS icon zip (`--icons-zip`). Only the drawn SVG goes into the file; the icon pack itself is never written out |
+| Real measurement | Heights are measured in chrome-headless-shell (puppeteer-core), never estimated; a verify pass checks every page for overflow |
 | Editable content | Page-scoped JSON; table rows, list items and Mermaid source are plain data |
 | Auto spill | Content that stops fitting after an edit moves to a `(continued)` page; nothing is deleted or forced |
 | Gospelo Document | One `.gospelo.html` carries its content, layout and original Markdown in an envelope at the top of the file; `check`, `build` and `restore` work from that file alone, so one file is all an editor (or an agent) needs. An optional `.gospelo.json` sidecar holds the same envelope |
 | Original preserved | The Markdown as imported is kept verbatim as page 0 of the envelope; `restore` gets it back |
 | Report | Per-page used / remaining height, row and item heights, figure scale, warnings, and planned spills |
-| PDF and PPTX | `build --pdf` prints through Chromium at the page size; `build --pptx` writes a fixed-appearance PowerPoint deck: one image slide per page (same Chromium rendering), invisible link hotspots, optional transparent selectable-text layer. Not editable in PowerPoint; see "PPTX export" below |
+| PDF and PPTX | `build --pdf` prints through the same browser at the page size; `build --pptx` writes a fixed-appearance PowerPoint deck: one image slide per page (same rendering), invisible link hotspots, optional transparent selectable-text layer. Not editable in PowerPoint; see "PPTX export" below |
 
 ## Prerequisites
 
@@ -42,12 +43,12 @@ Supported platforms: **macOS / Linux / WSL2**
 
 | Dependency | Install |
 | --- | --- |
-| [uv](https://docs.astral.sh/uv/) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Python 3.10+, markdown-it-py, Playwright | resolved automatically by `uv run` from the script's inline metadata (no `pip`, no venv) |
-| Chromium | one-time: `uv run <skill>/scripts/md2html.py setup` |
-| Mermaid ELK layout (optional) | one-time, needs Node.js and npm: `uv run <skill>/scripts/md2html.py setup --elk` |
+| [Node.js](https://nodejs.org/) 22.12+ (with npm) | md2html is TypeScript, bundled as `scripts/md2html.mjs` |
+| [uv](https://docs.astral.sh/uv/) (optional) | `curl -LsSf https://astral.sh/uv/install.sh \| sh`. `scripts/md2html.py` is a thin wrapper with no dependencies that runs `md2html.mjs`; `python3` works as well |
+| npm packages and chrome-headless-shell | one-time: `uv run <skill>/scripts/md2html.py setup` (runs `npm ci --omit=dev`, then installs the chrome-headless-shell version puppeteer-core expects into puppeteer's cache) |
+| AWS Architecture Icons zip (only for `aws:` icons) | download `Icon-package_*.zip` from https://aws.amazon.com/architecture/icons/ and pass it with `--icons-zip` |
 
-Mermaid.js, Shiki (syntax highlighting) and Font Awesome Free are vendored in the skill; nothing else is downloaded at run time. The Mermaid ELK layout (`layout: elk`) is not vendored (elkjs is EPL-2.0): `setup --elk` builds it once into the user cache from the pinned recipe in the skill (see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)).
+mermaid-arch (with Mermaid 12 and Font Awesome Free), Shiki (syntax highlighting) and the BIZ UD fonts are vendored in the skill; the npm packages are installed once by `setup`, and nothing else is downloaded at run time. The browser is taken from `--chrome PATH`, then `CHROME_PATH`, then `PUPPETEER_EXECUTABLE_PATH`, then puppeteer's cache.
 
 ## Usage example
 
@@ -67,6 +68,9 @@ uv run $S check out/handover.gospelo.html --report out/report.json
 
 # 3. Rebuild the same file (+ PDF and PPTX). Overflow is spilled to continuation pages and written back into the file.
 uv run $S build out/handover.gospelo.html --pdf out/handover.pdf --pptx out/handover.pptx
+
+# Diagrams with AWS icons: pass your AWS icon zip to every import / check / build of that document
+uv run $S import docs/architecture.md --page 16x9 --icons-zip "<path to Icon-package_*.zip>"
 
 # Roll back to the original Markdown at any time
 uv run $S restore out/handover.gospelo.html -o out/handover.original.md
@@ -121,7 +125,7 @@ Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**b
 }
 ```
 
-Pass it with `--layout layout.json`; CLI options win over the file. `overrides` adjust a single page or block: switch a page to a single column, make a block a full-width band (`span: 2`) or keep it in a column (`span: 1`), cap a figure's height.
+Pass it with `--layout layout.json`; CLI options win over the file. `overrides` adjust a single page or block: switch a page to a single column, make a block a full-width band (`span: 2`) or keep it in a column (`span: 1`), cap a figure's height. A page-level `splitRatio` override is accepted but not applied yet; use the document-wide `--split-ratio`.
 
 ### Options
 
@@ -129,7 +133,7 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | --- | --- | --- |
 | `--page` | `a4` | `a4` / `a4-landscape` / `a3` / `a3-landscape` / `16x9` / `4x3` |
 | `--font-size` | A4 11pt, A3 12pt, slides 14pt | Body size in `pt`, `px` or `mm`; every other dimension derives from it |
-| `--font-family` | BIZ UDPGothic, then Hiragino, Noto Sans JP | CSS font-family list for body text and diagram labels, e.g. `"'Noto Sans JP', sans-serif"`. Recorded in the file. Prefer fonts Chromium can embed in PDF: static (non-variable) glyf TrueType such as BIZ UD or the static Noto Sans JP TTFs. The CFF-based Hiragino is replaced by a 2 MB Osaka-Mono in the PDF, and a variable font is converted to outlines (large PDF, text not selectable) |
+| `--font-family` | BIZ UDPGothic, then Hiragino, Noto Sans JP | CSS font-family list for body text and diagram labels, e.g. `"'Noto Sans JP', sans-serif"`. Recorded in the file. Prefer fonts Chrome can embed in PDF: static (non-variable) glyf TrueType such as BIZ UD or the static Noto Sans JP TTFs. The CFF-based Hiragino is replaced by a 2 MB Osaka-Mono in the PDF, and a variable font is converted to outlines (large PDF, text not selectable) |
 | `--code-font-family` | SFMono, Menlo, BIZ UDGothic | CSS font-family list for code and inline code. Keep a CJK-capable monospace in the list, or Japanese inside code falls back to Osaka-Mono in the PDF |
 | `--no-embed-fonts` | off (fonts embedded) | Do not embed the BIZ UD subsets. By default the file carries `@font-face` subsets of BIZ UDPGothic (Regular and Bold) and BIZ UDGothic (Regular) covering only the characters the document uses, so viewers need no font installed and the PDF embeds the same subsets. A 15-page Japanese deck adds about 0.3 MB; see the fonts section below |
 | `--title-scale` | `1.25` | Slide header title size relative to body |
@@ -138,8 +142,10 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--figure-side` | `right` | Figure column side in `split` layout |
 | `--split-ratio` | `0.5` | Text column fraction in `split` layout (0.4 to 0.6) |
 | `--details` | `drop` | `<details>` handling; Mermaid sources inside folds are always rescued |
-| `--mermaid-lib` | `prerender` | `prerender`: diagrams are written as SVG and no library is shipped (a deck with five diagrams is about 0.3 to 0.5 MB); `embed`: inline Mermaid.js so the browser draws the diagrams (about 3 MB); `link`: reference a sibling `mermaid-<version>.min.js` |
-| `--mermaid-version` | newest vendored | Vendored Mermaid version to render with (`X.Y.Z`). A generated HTML records the version it was paginated with and is rebuilt with that same version; see `THIRD_PARTY_NOTICES.md` for adding versions |
+| `--icons-zip PATH` | | `import` / `check` / `build`: the AWS Architecture Icons zip (`Icon-package_*.zip`). Required when a diagram uses `aws:` icons; without it the command stops (`icons-zip-missing`) and shows the fix. The path is not recorded in the file, so pass it on every build |
+| `--chrome PATH` | | chrome-headless-shell executable (default: `CHROME_PATH`, `PUPPETEER_EXECUTABLE_PATH`, then puppeteer's cache) |
+| `--mermaid-lib` | `prerender` | The only mode: diagrams are written as SVG drawn by mermaid-arch and no library is shipped. Documents written with `embed` or `link` by earlier releases stop with an error; rebuild them with `--mermaid-lib prerender` |
+| `--mermaid-version` | the version mermaid-arch draws with | The file records the Mermaid version it was paginated with. A document paginated with another version (for example 11.12.2 from the Python releases) stops with an error, because diagram sizes and page breaks may change; rebuild with `--mermaid-version 12.3.0` to accept that. Mermaid 12 lays flowcharts out with ELK unless the diagram sets `layout: dagre` |
 | `--hr-break` | off | Treat `---` as a page break in slide formats |
 | `--embed-images` | off | Inline images as data URIs |
 | `--date` | today | Footer date, or `none` |
@@ -156,13 +162,13 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 
 ### Fonts: embedded subsets
 
-The generated HTML carries its Japanese fonts. `import` and `build` collect the characters the document uses and write subsets of the bundled BIZ UD fonts (SIL Open Font License) into the `<style>` block as `@font-face` data URIs: BIZ UDPGothic Regular for body text, BIZ UDPGothic Bold for headings, table headers and `**bold**` only, and BIZ UDGothic Regular for code only. The same subsets are used while measuring, so pagination does not depend on the fonts installed on the building machine, and a reader on macOS, Windows or Linux sees the same glyphs without installing anything. The cost is size: a 15-page 16:9 deck grew from 0.46 MB to 0.77 MB, and its PDF shrank from 0.40 MB to 0.24 MB because Chromium embeds the subsets instead of a system font.
+The generated HTML carries its Japanese fonts. `import` and `build` collect the characters the document uses and write subsets of the bundled BIZ UD fonts (SIL Open Font License) into the `<style>` block as `@font-face` data URIs: BIZ UDPGothic Regular for body text, BIZ UDPGothic Bold for headings, table headers and `**bold**` only, and BIZ UDGothic Regular for code only. The same subsets are used while measuring, so pagination does not depend on the fonts installed on the building machine, and a reader on macOS, Windows or Linux sees the same glyphs without installing anything. The cost is size: a 15-page 16:9 deck grew from 0.46 MB to 0.77 MB, and its PDF shrank from 0.40 MB to 0.24 MB because Chrome embeds the subsets instead of a system font. The page mermaid-arch draws diagrams in gets the same subsets, so diagram labels are measured with the fonts the document shows. When a diagram label uses `fa:` icons, the file also carries Font Awesome Free (all styles, fonts as data URIs, about 0.5 MB).
 
 Only the bundled families are embedded. If `--font-family` names another font, that font must be installed wherever the file is viewed. `--no-embed-fonts` (layout `embedFonts: false`) turns embedding off, for example when the file is only viewed on machines that have BIZ UD installed. Latin text still comes from the first installed font in the stack (`-apple-system`, Helvetica Neue) when there is one, and from BIZ UDPGothic otherwise.
 
 ### PPTX export: what you get and what you do not
 
-`--pptx` produces **fixed-appearance slides**: each page is one picture, rendered by the same Chromium that verified the layout, so the deck looks exactly like the HTML and the PDF, on any machine. It is a delivery format, not an editing format.
+`--pptx` produces **fixed-appearance slides**: each page is one picture, rendered by the same browser that verified the layout, so the deck looks exactly like the HTML and the PDF, on any machine. It is a delivery format, not an editing format.
 
 Use it when:
 
@@ -192,7 +198,7 @@ python $INSTALL --user --symlink             # development: symlink back to this
 python $INSTALL --project /path/to/repo --force
 ```
 
-Then, once per machine: `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup`.
+Then, once per installed copy: `uv run .claude/skills/gospelo-md2html/scripts/md2html.py setup`. The installer does not copy `node_modules`; `setup` installs the npm packages from the bundled `package-lock.json` (mermaid-arch comes from the tarball in the skill's `vendor/`, so no GitHub access is needed) and chrome-headless-shell.
 
 Agents discover the skill via [SKILL.md](./skills/claude/gospelo-md2html/SKILL.md) and trigger it when you say things like *"convert this Markdown to A4 PDF"*, *"make slides from this doc"*, or *"add a row to the table on page 5"*. SKILL.md tells the agent to dry-run first, edit only the JSON, check capacity before building, and screenshot the result before reporting.
 
@@ -202,14 +208,14 @@ OpenCode needs no separate copy; see [skills/opencode/README.md](./skills/openco
 
 ```bash
 cd md2html/skills/claude
-zip -r gospelo-md2html.zip gospelo-md2html -x "*__pycache__*" -x "*.DS_Store"
+zip -r gospelo-md2html.zip gospelo-md2html -x "*__pycache__*" -x "*.DS_Store" -x "*node_modules*"
 ```
 
-The recipient unzips it and runs `python gospelo-md2html/scripts/install.py --project /path/to/repo`.
+The recipient unzips it, runs `python gospelo-md2html/scripts/install.py --project /path/to/repo`, then `setup` in the installed copy.
 
 ## How pagination works
 
-- Heights come from a measurement pass: every block is rendered in a hidden flow container at the text column width (and at full width for landscape formats), and Chromium reports block, row, item and line heights.
+- Heights come from a measurement pass: every block is rendered in a hidden flow container at the text column width (and at full width for landscape formats), and the browser reports block, row, item and line heights. Mermaid diagrams are drawn by mermaid-arch first, in its own page of the same browser, and measured as SVG.
 - Pages are filled greedily to 98% of the content height. Headings reserve room for the following lines (or the whole figure) so they never end a page. Tables split at row boundaries with the header repeated and never leave fewer than three rows; code splits only above 15 lines; paragraphs split at measured line boundaries with the inline Markdown re-serialised on both sides.
 - Landscape formats use two columns in column order (down the left column, then the right); tables with four or more columns and wide figures become full-width bands, and a figure that does not fit the left column floats to the top of an empty right column. The columns above a band are balanced to end at the same height, moving whole blocks only; at the end of a page or section the left column simply fills first.
 - A verify pass opens the final HTML, measures each page again, and spills anything that still overflows. `build` keeps your page boundaries and only ever moves content forward into `(continued)` pages.
@@ -224,27 +230,33 @@ md2html/
 │   ├── claude/
 │   │   └── gospelo-md2html/
 │   │       ├── SKILL.md                 # Agent Skill definition and workflow
+│   │       ├── package.json, package-lock.json, tsconfig.json
+│   │       ├── src/                     # TypeScript: cli, blocks, inline, markdown, paginate, measure, render,
+│   │       │                            # content, layout, fonts, mermaid (mermaid-arch), pptx, assets, scale, formats, report
+│   │       ├── vendor/                  # gospelo-mermaid-arch-<version>-<commit>.tgz and its provenance note
 │   │       ├── scripts/
-│   │       │   ├── md2html.py           # CLI (PEP 723 metadata; run with uv)
-│   │       │   ├── md2html/             # blocks, inline, paginate, measure, render, content, layout,
-│   │       │   │                        # fonts (embedded subsets), pptx_export, assets, scale, formats, report
+│   │       │   ├── md2html.mjs          # The CLI, bundled from src/ with esbuild (committed; npm run build)
+│   │       │   ├── md2html.py           # Thin wrapper: finds node and runs md2html.mjs (setup: npm ci + browser)
 │   │       │   ├── kumihan/             # Typesetting engine for h1 headings (work in progress; not used by md2html yet)
 │   │       │   ├── extract_markdown.py  # Migration: pull the Markdown out of any file the tool wrote
 │   │       │   └── install.py           # Installer for agent discovery paths
 │   │       └── references/
 │   │           ├── base.css             # Page frame and typography (CSS variables)
-│   │           ├── figures.js           # Browser side: Mermaid rendering and column split, Shiki, figure sizing
+│   │           ├── figures.js           # Browser side: figure sizing, column split of tall flowcharts, Shiki
 │   │           ├── gospelo-document.schema.json  # Envelope schema (the file format)
 │   │           ├── layout.schema.json   # Layout JSON schema (--layout files)
 │   │           ├── page_formats.md      # Paper sizes, margins, defaults
 │   │           ├── layout_rules.md      # Pagination rules
 │   │           ├── editing_guide.md     # How an agent edits the envelope
 │   │           ├── color-scheme.md      # Mermaid palette used in the docs' diagrams
-│   │           └── vendor/              # Mermaid.js (per version), Shiki, Font Awesome Free, BIZ UD fonts, ELK build recipe (see THIRD_PARTY_NOTICES.md)
+│   │           └── vendor/              # Shiki, BIZ UD fonts (see THIRD_PARTY_NOTICES.md)
 │   └── opencode/README.md               # How OpenCode picks up the same skill
-├── tests/                               # pytest: pagination and two columns, inline split, envelope I/O, migration,
-│                                        # Mermaid vendoring and prerender, PPTX export, fonts, kumihan (golden SVGs)
-├── .github/workflows/ci.yml             # CI: pytest, and a Chromium smoke test that imports tests/fixtures
+├── tests/
+│   ├── ts/                              # node --test: pagination and two columns, inline split, envelope I/O,
+│   │                                    # diagrams via mermaid-arch, PPTX export, fonts, the CLI end to end
+│   ├── kumihan/, test_extract_markdown.py  # pytest: the Python parts that remain
+│   └── fixtures/
+├── .github/workflows/ci.yml             # CI: node tests (and a check that md2html.mjs matches src/), pytest, a smoke test through md2html.py
 ├── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
 ├── assets/                              # README hero image; design/ holds the DESIGN figures and the script that draws them
 ├── THIRD_PARTY_NOTICES.md               # Licenses of the vendored assets and runtime dependencies
@@ -254,12 +266,18 @@ md2html/
 Run the tests the way CI does:
 
 ```bash
-uv run --python 3.14.9 \
-  --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright \
-  --with python-pptx --with pillow --with brotli \
+# TypeScript (Node 22.18+, which runs the .ts tests directly)
+cd skills/claude/gospelo-md2html && npm ci && npm test && cd -
+# set MD2HTML_TEST_ICONS_ZIP to an AWS icon zip to also run the aws: icon test
+
+# Python (kumihan and extract_markdown.py)
+uv run --python 3.13.1 \
+  --with pytest \
   --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py \
-  pytest -q tests
+  pytest -q tests/kumihan tests/test_extract_markdown.py
 ```
+
+After changing `src/`, run `npm run build` and commit `scripts/md2html.mjs` with it; CI checks that the two match.
 
 The kumihan golden SVGs record the Python and library versions they were generated with, so those versions are pinned; after upgrading one, regenerate the goldens with `pytest tests/kumihan --update-golden`.
 

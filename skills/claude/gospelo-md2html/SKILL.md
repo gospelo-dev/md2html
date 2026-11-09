@@ -7,7 +7,9 @@ description: >
   editable in PowerPoint), with a chosen body font size. The output is one self-contained .gospelo.html
   (a Gospelo Document): its content (one JSON object per page) and layout sit
   at the top of the file, so the file can be edited and rebuilt on its own;
-  the original Markdown is preserved inside. Use this skill when the user says
+  the original Markdown is preserved inside. Mermaid diagrams, including
+  architecture diagrams with AWS icons, are drawn into the file as SVG.
+  Use this skill when the user says
   "md2html", "markdown to html", "markdown to pdf", "markdown to pptx",
   "パワポにする", "A4 で出力",
   "スライドにする", "16:9", "4:3", "印刷用", "ページ区切り",
@@ -19,29 +21,27 @@ description: >
 Markdown を取り込み、ページ割り済みの **Gospelo Document** (`<name>.gospelo.html`) を書く。
 編集対象はその HTML の先頭にあるエンベロープ JSON (`<script id="gospelo-document">`) だけで、
 `check` / `build` はその HTML を入力にして同じファイルを再生成する。Mermaid 図はビルド時に
-Chromium で描いて SVG として書き込む (既定の `--mermaid-lib prerender`。ソースはエンベロープに残る)。
-ページ割りは Playwright (Chromium) で実測する。
+mermaid-arch (Mermaid 12) で描いて SVG として書き込む (ソースはエンベロープに残る)。
+AWS アイコン入りの構成図も描ける (`--icons-zip`)。ページ割りは chrome-headless-shell で実測する。
+
+本体は TypeScript (Node.js) の `scripts/md2html.mjs`。`scripts/md2html.py` はそれを呼ぶだけの
+ラッパーで、引数と終了コードはそのまま渡す。
 
 レイアウトの要約は `references/` にある。設計の根拠 (判断事項、ページ割りアルゴリズムの詳細)
 はリポジトリ `gospelo-dev/md2html` のメンテナ用 `development/docs/` にあり、スキル本体には含めない。
 
 ## 前提
 
-- `uv` が必要。Python パッケージは `scripts/md2html.py` 先頭の PEP 723 宣言から
-  uv が解決するので、pip や venv は使わない。
-- 初回だけ Chromium を入れる:
+- Node.js 22.12 以上と npm が必要。`uv` (または python3) はラッパーを動かすのに使う。
+- スキルを入れた先で初回だけ `setup` を実行する。npm パッケージ (`npm ci`) と
+  chrome-headless-shell (puppeteer の cache) を入れる:
 
 ```bash
 uv run <skill>/scripts/md2html.py setup
 ```
 
-- Mermaid の ELK レイアウトを使うときは、初回だけ ELK のバンドルを作る (Node.js と npm が必要。
-  ネットワークを使うのはこのときだけ)。下の「Mermaid の ELK レイアウト」を参照:
-
-```bash
-uv run <skill>/scripts/md2html.py setup --elk        # Chromium と ELK
-uv run <skill>/scripts/md2html.py setup --elk-only   # ELK だけ
-```
+- ブラウザは `--chrome PATH`、`CHROME_PATH`、`PUPPETEER_EXECUTABLE_PATH`、puppeteer の cache
+  の順に探す。見つからないときはエラーに入れ方のコマンドが出る。
 
 ## 手順 (Agent が守ること)
 
@@ -55,7 +55,7 @@ uv run <skill>/scripts/md2html.py setup --elk-only   # ELK だけ
    内容を削ってページに収めることはしない。
 5. `build` で同じ HTML を再生成する (`--pdf` で PDF も)。はみ出しは同じタイトルの続きページへ
    自動で送られ、エンベロープに書き戻される。
-6. 生成した HTML を Playwright / puppeteer でスクリーンショットし、はみ出しや
+6. 生成した HTML をブラウザでスクリーンショットし、はみ出しや
    図の過小縮小がないことを見てから完了を報告する。レポートの警告は必ず伝える。
 7. `--reflow` (ページ割り全体のやり直し) と `import --force` (編集を捨てる)
    は利用者の指示があるときだけ使う。
@@ -67,6 +67,15 @@ uv run <skill>/scripts/md2html.py setup --elk-only   # ELK だけ
     文字や表は編集できない。編集は `.gospelo.html` を直して `build` し直す」と必ず伝える。
     相手が PowerPoint で編集したい場合には向かない。フォント置換を避けたい配布や、`.pptx`
     指定の提出先に向く。検索やコピーが必要なら `--pptx-text` を付ける。
+11. AWS アイコン (`aws:lambda` など) を使う図があるときは、利用者が手元に置く AWS
+    Architecture Icons の zip (`Icon-package_*.zip`) の場所を `--icons-zip` で渡す
+    (`import` / `check` / `build` のたびに必要。文書には記録しない)。場所が分からなければ
+    利用者に聞く。推測したパスや別のアイコンで代用しない。アイコンは描いた図の一部としてだけ
+    文書に入り、アイコンの集まり (アイコンパック) は文書にもファイルにも出ない。
+12. Python 版 (0.6 以前) で作った文書を `build` すると、Mermaid の版の違い (11.12.2) で止まる。
+    図の大きさやページの切れ目が変わってよいかを利用者に確かめてから、エラーが示す
+    `--mermaid-version` を付けて `build` する。`mermaidLib` が `embed` / `link` の文書も同様に、
+    `--mermaid-lib prerender` を付ける。
 
 ## コマンド
 
@@ -78,8 +87,15 @@ uv run $S check   out/deck.gospelo.html --report report.json                    
 uv run $S build   out/deck.gospelo.html [--pdf out/deck.pdf] [--pptx out/deck.pptx] [--reflow] [--font-size 12pt]   # 同じファイルを再生成 (PDF / PPTX も)
 uv run $S restore out/deck.gospelo.html -o original.md
 uv run $S import  INPUT.md -o content.gospelo.json --page a4   # 分離 JSON (任意)。build で HTML にする
+uv run $S import  INPUT.md --page 16x9 --icons-zip "<path to Icon-package_*.zip>"   # AWS アイコン入りの図
 python <skill>/scripts/extract_markdown.py old.html -o original.md   # 旧形式からの移行
 ```
+
+Mermaid 図は Mermaid 12 で描く。flowchart は何も指定しないと elk で並ぶ。以前の並び方が
+よい図は、図の先頭の front matter で `layout: dagre` を指定する。AWS アイコンは
+`fn@{ icon: "aws:lambda", form: "square", label: "Handler" }` (flowchart) や
+`service fn(aws:lambda)[Handler]` (architecture-beta) の形で書く。図のラベルに `fa:fa-user`
+のような Font Awesome のアイコンがあると、Font Awesome Free を HTML に埋め込む。
 
 用紙: `a4` (既定) / `a4-landscape` / `a3` / `a3-landscape` / `16x9` / `4x3`。
 文字サイズの既定は A4 11pt、A3 12pt、スライド 14pt。用紙と文字サイズは `import`
@@ -100,49 +116,6 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 `references/layout_rules.md`、ファイル形式は `references/gospelo-document.schema.json`
 (エンベロープ) と `references/layout.schema.json` (`--layout` に渡すレイアウト JSON)。
 
-## Mermaid の ELK レイアウト
-
-mermaid ブロックで ELK を指定すると、測るとき (`import`) も最終の出力 (`build`、HTML と PDF) も
-ELK で描く。指定の書き方は次のどれか:
-
-````markdown
-```mermaid
-%%{init: {"layout": "elk"}}%%
-flowchart TD
-  A --> B
-```
-
-```mermaid
----
-config:
-  layout: elk
----
-flowchart TD
-  A --> B
-```
-
-```mermaid
-flowchart-elk TD
-  A --> B
-```
-````
-
-- 使える名前は `elk` (elk.layered)、`elk.stress`、`elk.force`、`elk.mrtree`、`elk.sporeOverlap`。
-- 使う版は @mermaid-js/layout-elk **0.2.0** (elkjs 0.9.3)。同梱の Mermaid 11.12.2 と組にしてある
-  (`scripts/md2html/assets.py` の `MERMAID_LAYOUT_ELK`)。
-- バンドルはリポジトリに含めない (elkjs は EPL-2.0)。`setup --elk` が
-  `references/vendor/mermaid-layout-elk/build/` の手順 (版を固定した `package.json`) で、利用者の
-  キャッシュ `${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html/mermaid-layout-elk/0.2.0/` に作る
-  (環境変数 `GOSPELO_MD2HTML_CACHE_DIR` で `gospelo-md2html/` の場所を変えられる)。
-- フォールバックはしない。ELK を指定したのにバンドルがない、読み込めない、または上の名前以外の
-  `elk*` を指定した場合は、既定 (dagre) で描かずにエラーで止まる (終了コード 1)。
-  バンドルがないときは `setup --elk` を実行する。
-- ELK を指定していない図の描かれ方は変わらない。出力にも ELK は入らない。
-- 既定の `prerender` の出力には、ELK で描いた SVG だけが入る (elkjs は入らない)。`embed` / `link`
-  では、ELK を指定した図があるときだけ、ELK のバンドルとそのライセンス (EPL-2.0 を含む) が HTML に
-  入る (`link` は `mermaid-layout-elk-0.2.0.min.js` を出力の横に写す)。そうした HTML を配るときは、
-  `THIRD_PARTY_NOTICES.md` を参照。
-
 ## 警告への対処
 
 | 警告 | 対処 |
@@ -153,10 +126,13 @@ flowchart-elk TD
 | droppedDetails | `<details>` を捨てた。本文として必要なら `--details expand` |
 | droppedListBlocks | 入れ子のリストの項目の中にあったコード、表、引用などを捨てた (入れ子の項目は文字と子のリストしか持てない)。一番外のリストの項目の中なら、リストを区切ってブロックとして残すので、このメモは出ない。残したいなら Markdown で一番外の項目の下に移す |
 | verification did not converge (終了コード 2) | 3 回送っても収まらない。レポートのページを利用者に示す |
-| the layout-elk ... bundle is not built | ELK を指定した図がある。`setup --elk` を実行してから同じコマンドをやり直す |
-| diagram requests layout ..., which is not an ELK layout | `layout:` の名前の誤り。上の ELK の名前に直す |
+| icons-zip-missing / no AWS icon zip was given | 図が `aws:` アイコンを使っている。利用者に zip の場所を聞いて `--icons-zip` で渡す |
+| Mermaid cannot parse or draw this diagram | エラーの `diagram N = block <id>` で該当の図を特定し、Mermaid の書き方を直す |
+| paginated with Mermaid 11.12.2 | Python 版で作った文書。手順 12 のとおり利用者に確かめてから `--mermaid-version` を付ける |
+| chrome-missing | chrome-headless-shell がない。`setup` を実行するか、エラーに出たコマンドで入れる |
 | no gospelo-document envelope found | 0.2 より前の出力。`extract_markdown.py` で原文を取り出して `import` し直す |
 
 ## 終了コード
 
-0 = 成功 (自動送りが起きても 0)、1 = 入力や依存関係のエラー、2 = 検証が収束しない。
+0 = 成功 (自動送りが起きても 0)、1 = 入力や依存関係のエラー、2 = 検証が収束しない、
+またはオプションの誤り。

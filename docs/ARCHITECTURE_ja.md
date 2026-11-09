@@ -11,7 +11,7 @@ md2html の成果物は **Gospelo Document**、すなわち `.gospelo.html` フ�
 | 配布物は 1 ファイル | 付随する JSON、外部の Mermaid ライブラリ、外部スクリプトを持たない。パス参照の画像だけは、埋め込みを指定しない限り外部に残る |
 | ツールが無くても編集できる | 全ページを決めるコンテンツは素の JSON としてファイル内にあり、エディタやエージェントが最初に目にする位置に置く |
 | そのファイルだけで再生成できる | `build out.gospelo.html` が埋め込みエンベロープから描画済みページを作り直す。原文 Markdown も内部に保持し `restore` で取り出せる |
-| 読み込みが軽い | ツールはファイルの先頭だけを読んでエンベロープを得る。それ以降 (描画済みページ、`embed` のときは数 MB の Mermaid ライブラリ) を Python が解析することはない |
+| 読み込みが軽い | ツールはファイルの先頭だけを読んでエンベロープを得る。それ以降 (描画済みページ、図の SVG、スクリプト) をツールが解析することはない |
 | 差分が読める | エンベロープは整形して埋め込み、描画済みページは 1 ブロック 1 行で出すため、1 段落の変更は数行の差分として版管理に現れる |
 
 ## 2. ファイルの配置
@@ -34,17 +34,16 @@ flowchart TB
         Pn["section.page (n / N)"]
         P1 --> P2 --> Pn
     end
-    subgraph Tail["3. 末尾 (大きい、静的)"]
+    subgraph Tail["3. 末尾 (小さい、静的)"]
         direction TB
-        MJ["mermaid.min.js + MIT 表示 (約 3 MB)<br/>embed / link のときだけ。既定の prerender は SVG を書く"]
-        F["figures.js: 画像と Mermaid のサイズ決定、<br/>縦長フローチャートの段組み"]
+        F["figures.js: 画像と図のサイズ決定、<br/>縦長フローチャートの段組み"]
         N["ページ番号の振り直しスクリプト"]
-        MJ --> F --> N
+        F --> N
     end
     Head --> Body --> Tail
 
     classDef node fill:#FFFFFF,stroke:#666666,stroke-width:1.5px,color:#2C2C2C
-    class SIG,ENV,S,P1,P2,Pn,F,N,MJ node
+    class SIG,ENV,S,P1,P2,Pn,F,N node
     style Head fill:#F0FDFA,stroke:#0D9488,color:#2C2C2C
     style Body fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
     style Tail fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
@@ -56,8 +55,9 @@ flowchart TB
 | エンベロープ 1 ブロック、`<head>` の先頭 | すべての `<style>` と他のすべての `<script>` より前。3.1 MB のスライドでは 282 バイト目から始まり約 37 KB で終わり、読み手が最初に取る 64 KB のチャンクに収まる |
 | 原文 Markdown はエンベロープの中 | `pages[0]`、`kind: "source"`。別の Markdown ブロックは持たず、データは 1 か所だけ |
 | フォントは `<style>` の中 | 同梱の BIZ UD (OFL) をエンベロープに含まれる文字だけに絞ったサブセットを `@font-face` の data URI で持つ。本文に Regular、見出しと強調に Bold、コードに BIZ UDGothic。計測ページも同じ CSS を使うので、ページ割りはインストール済みフォントに左右されない。`embedFonts: false` で省く |
-| 図は SVG (既定の `prerender`) | 検証パスが Chromium で各 Mermaid ブロックを描き、最終ファイルにはその SVG を図の中に書く。ライブラリは同梱しない。ソースはエンベロープに残るので `build` が描き直す |
-| Mermaid ライブラリは `<body>` の末尾 (`embed` / `link`) | 直前に MIT 表示のコメント。Mermaid は DOM 構築後に初期化されるので位置は描画に影響しない。その後に `figures.js`、ページ番号スクリプト |
+| 図は SVG (`prerender`。唯一のモード) | 各 Mermaid ブロックは、計測の前に [mermaid-arch](https://github.com/gospelo-dev/mermaid-arch) (Mermaid 12) がツールのブラウザの別ページで描き、ファイルにはその SVG を図の中に書く (要素の id は `md2html-mermaid-N`)。ライブラリは同梱しない。ソースはエンベロープに残るので `build` が描き直す。AWS アイコンを使う図は、利用者の AWS のアイコン zip (`--icons-zip`) から描く。アイコンパックは mermaid-arch の外に出さず、ファイルに入るのは描いた SVG だけ |
+| Font Awesome は `<head>` (`fa:` のラベルがあるときだけ) | mermaid-arch の Font Awesome Free (全スタイル、フォントは data URI)。図を描いたページと同じ CSS なので、SVG のラベル内のアイコンが表示される |
+| スクリプトは `<body>` の末尾 | `figures.js` (図のサイズ決定と縦長フローチャートの段組み)、その後にページ番号スクリプト |
 | 描画済みページは build のたびに再生成 | DOM は派生データであり、直接編集は対象外 |
 
 ### 2.1 エスケープの規則
@@ -92,7 +92,7 @@ flowchart LR
 | コマンド | 入力 | 出力 |
 | --- | --- | --- |
 | `import` | Markdown | `<name>.gospelo.html` (ページ割りと検証済み)。`-o name.gospelo.json` なら分離 JSON |
-| `build` | `.gospelo.html` または `.gospelo.json` | 同じ HTML を上書き (`-o` で別の場所も可。JSON 入力なら `<name>.gospelo.html`)、任意で PDF (`--pdf`) と PPTX (`--pptx`: 同じ Chromium の描画を 1 ページ 1 枚の画像スライドに、リンク領域と任意の透明テキスト層付き) |
+| `build` | `.gospelo.html` または `.gospelo.json` | 同じ HTML を上書き (`-o` で別の場所も可。JSON 入力なら `<name>.gospelo.html`)、任意で PDF (`--pdf`) と PPTX (`--pptx`: 同じブラウザの描画を 1 ページ 1 枚の画像スライドに、リンク領域と任意の透明テキスト層付き) |
 | `build --reflow` | 同上 | 全ページを組み直す |
 | `check` | 同上 | 容量レポートと送りの予定。何も書かない |
 | `restore` | 同上 | `pages[0]` の原文 Markdown |
@@ -101,35 +101,35 @@ flowchart LR
 
 ### 3.2 import と build の内部
 
-両コマンドは計測、ページ割り、検証の同じパイプラインを共有する。高さは推定せず、ヘッドレス Chromium で描画して測る。
+両コマンドは計測、ページ割り、検証の同じパイプラインを共有する。高さは推定せず、chrome-headless-shell (puppeteer-core) で描画して測る。すべてのパスで 1 つのブラウザを使い、mermaid-arch も同じブラウザの別ページで図を描く。
 
 ```mermaid
 flowchart TB
     subgraph Import["import"]
         direction LR
-        I1["Markdown を<br/>ブロック列に"] --> I2["高さを計測<br/>(段幅と全幅)"] --> I3["ページ割り<br/>容量 = 高さ x 0.98"]
+        I1["Markdown を<br/>ブロック列に"] --> I0["図を描く<br/>(mermaid-arch、SVG)"] --> I2["高さを計測<br/>(段幅と全幅)"] --> I3["ページ割り<br/>容量 = 高さ x 0.98"]
     end
     subgraph Common["確定と検証 (import と build で共通)"]
         direction LR
-        B1["ページごとに配置<br/>(2 段、帯、図)"] --> B2["HTML を描画"] --> B3["Chromium で開き<br/>はみ出しを検出"]
+        B1["ページごとに配置<br/>(2 段、帯、図)"] --> B2["HTML を描画"] --> B3["ブラウザで開き<br/>はみ出しを検出"]
         B3 -->|はみ出し| B4["末尾ブロックを<br/>続きページへ"] --> B2
         B3 -->|問題なし、最大 3 回| B5["最終ページ列"]
     end
     subgraph Out["出力"]
         direction LR
-        O1["先頭にエンベロープ:<br/>Markdown、ページ、実効レイアウト"] --> O2["描画済みページを追加"] --> O3["mermaid.min.js、figures.js、<br/>番号振りを末尾に"]
+        O1["先頭にエンベロープ:<br/>Markdown、ページ、実効レイアウト"] --> O2["描画済みページを追加<br/>(図は SVG)"] --> O3["figures.js、<br/>番号振りを末尾に"]
     end
     Import --> Common --> Out
     H["既存の .gospelo.html"] -->|build: 先頭を読む| Common
 
     classDef node fill:#FFFFFF,stroke:#666666,stroke-width:1.5px,color:#2C2C2C
-    class I1,I2,I3,B1,B2,B3,B4,B5,O1,O2,O3,H node
+    class I1,I0,I2,I3,B1,B2,B3,B4,B5,O1,O2,O3,H node
     style Import fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
     style Common fill:#F0FDFA,stroke:#0D9488,color:#2C2C2C
     style Out fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
 ```
 
-`import` も確定と検証のパスを通すので、書き出すファイルは `build` がそこから作るものと同一で、後の `build` は何も動かさない。Mermaid 図は検証パスの中で同梱の Mermaid.js が Chromium 上で描く。既定の `prerender` ではその SVG をファイルに書き込みライブラリは同梱しないが、ソース文字列はエンベロープに残るので図は編集できる (ソースを直して `build`)。`embed` と `link` ではソースをページに置き、ブラウザが描く。エンベロープは使った Mermaid の版を記録し (`layout.mermaidVersion`)、再生成は必ずその版で行う。図の寸法、したがってページ割りが版に依存するためである。言語名付きのコードブロックも同じ方式で、同梱の Shiki が計測パスと検証パスで色付けし、最終ファイルには色付けした `<span>` のマークアップだけが入る。ハイライタ本体は入らない。
+`import` も確定と検証のパスを通すので、書き出すファイルは `build` がそこから作るものと同一で、後の `build` は何も動かさない。Mermaid 図は計測パスの前に mermaid-arch が描く。描くページには文書のフォントのサブセットを読み込むので、計測する図と書き出す図は同じ SVG になる。ファイルにはその SVG を書き、ライブラリは同梱しないが、ソース文字列はエンベロープに残るので図は編集できる (ソースを直して `build`)。エンベロープは使った Mermaid の版を記録する (`layout.mermaidVersion`)。別の版で記録された文書 (Python 版の 11.12.2 など。`mermaidLib` が `embed` / `link` の文書も) は黙って作り直さず、変更を受け入れるオプション (`--mermaid-version`、`--mermaid-lib prerender`) を示して止まる。図の寸法、したがってページ割りが版に依存するためである。言語名付きのコードブロックも同じ方式で、同梱の Shiki が計測パスと検証パスで色付けし、最終ファイルには色付けした `<span>` のマークアップだけが入る。ハイライタ本体は入らない。
 
 ## 4. 先頭だけを読む
 
@@ -138,23 +138,23 @@ flowchart TB
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'actorBkg': '#FFFFFF', 'actorBorder': '#666666', 'actorTextColor': '#2C2C2C', 'signalColor': '#0D9488', 'signalTextColor': '#2C2C2C', 'noteBkgColor': '#F0FDFA', 'noteBorderColor': '#0D9488', 'noteTextColor': '#2C2C2C', 'activationBkgColor': '#F8FAFC', 'activationBorderColor': '#94A3B8', 'loopTextColor': '#2C2C2C', 'labelBoxBkgColor': '#F0FDFA', 'labelBoxBorderColor': '#0D9488', 'labelTextColor': '#2C2C2C'}}}%%
 sequenceDiagram
-    participant T as md2html (Python)
+    participant T as md2html
     participant F as out.gospelo.html
 
     T->>F: 開いて 64 KB を 1 チャンク読む
     F-->>T: バイト列
     T->>T: script id=gospelo-document を探す (このチャンク内に必須)
     T->>T: 終端タグを探す (必要なときだけ次のチャンクを読む)
-    T-->>T: 読み込みを終了 (ページと Mermaid ライブラリは読まない)
-    T->>T: json.loads(エンベロープ)、format と version を検証
+    T-->>T: 読み込みを終了 (ページとスクリプトは読まない)
+    T->>T: JSON.parse(エンベロープ)、format と version を検証
     Note over T: 最初のチャンクにエンベロープが無ければ<br/>docs/MIGRATION.md へのリンク付きエラー
 ```
 
 | 観点 | 備考 |
 | --- | --- |
-| 早期終了 | `content.read_head` に実装。`embedImages` で画像を埋め込んだときや、数十 MB の長い文書で効き、メモリも先頭分で済む |
+| 早期終了 | `readHead` (`src/content.ts`) に実装。`embedImages` で画像を埋め込んだときや、数十 MB の長い文書で効き、メモリも先頭分で済む |
 | フォールバック無し | 最初のチャンクにエンベロープが無いファイルは拒否する。ファイル全体の走査も、以前のブロック配置の読み手も持たない |
-| `build` に必要なのは先頭だけ | Mermaid ライブラリは同梱の vendor 版から取り、ページはエンベロープから再生成する |
+| `build` に必要なのは先頭だけ | 図は mermaid-arch がソースから描き直し、ページはエンベロープから再生成する。AWS アイコンを使う図は、AWS のアイコン zip (`--icons-zip`) も再び必要。zip のパスはファイルに記録しない |
 
 ## 5. 編集の流れ
 
@@ -172,7 +172,7 @@ sequenceDiagram
     T->>H: 先頭を読む
     T-->>A: 容量レポート、送りの予定
     A->>T: build out.gospelo.html
-    T->>H: 先頭を読み、再描画し、Chromium で検証
+    T->>H: 先頭を読み、再描画し、ブラウザで検証
     T->>H: ファイル全体を書き出す (送りがあればエンベロープも更新)
     T-->>A: wrote out.gospelo.html
 ```
@@ -186,7 +186,7 @@ sequenceDiagram
 ## 6. 差分と版管理
 
 - エンベロープは整形済み (2 スペースのインデント、1 行 1 キー)。1 段落の編集は数行の差分になる。
-- Mermaid ライブラリは固定版なので差分に現れない。
+- ファイルにライブラリを書かないので、差分にも現れない。図の SVG は決まった形で描く (要素の id と手描き風の乱数の種を固定) ので、変えていない図は同じ SVG に作り直される。
 - 描画済みページは 1 ブロック 1 行で出すので、描画部分の差分もブロック単位になる。レビューは引き続きエンベロープ側で行う想定。
 - 内容はエンベロープと DOM の 2 か所に現れる。これは設計どおりで、DOM は派生データとして再生成され、この重複があるからこそツールが無くても閲覧できる。
 
@@ -194,9 +194,9 @@ sequenceDiagram
 
 | 論点 | トレードオフ | 立場 |
 | --- | --- | --- |
-| ファイルサイズ | Mermaid.js を同梱すると 1 ファイルあたり約 3 MB 増える | 既定の `prerender` は図を SVG として書き、ライブラリを同梱しない (図 5 枚の 15 ページのスライドで約 0.45 MB。大半は `fa:` アイコン用の Font Awesome フォント)。`embed` (ブラウザ描画、約 3 MB) と `link` (隣の `mermaid-<version>.min.js` を共有) は選択肢として残す |
+| ファイルサイズ | Mermaid を同梱すると 1 ファイルあたり数 MB 増える | 図は常に SVG として書き、ライブラリを同梱しない。`fa:` アイコンを使うと Font Awesome Free で約 0.5 MB 増える (mermaid-arch の全スタイル。Python 版は solid スタイルだけで約 0.2 MB だった)。ブラウザで描く `embed` / `link` は廃止した。AWS アイコンを使う図は、アイコンパックを同梱しない限りビューアで描けないため |
 | 複数の用紙 | 1 つのファイルは 1 つのレイアウトしか持たない。同じ内容を A4 と 16:9 で出すならファイルが 2 つになる | 受け入れる。どちらのファイルからでも `build --page a4 --reflow` で作り直せる。エンベロープの内容は同じ |
-| JavaScript が動かないビューア | スクリプトが動かない環境ではページ番号が静的値のままになり、`embed` / `link` では Mermaid がソースのまま表示される | 受け入れる。既定の `prerender` では図は素の SVG なので、スクリプト無しでも表示される |
+| JavaScript が動かないビューア | スクリプトが動かない環境ではページ番号が静的値のままになり、縦長のフローチャートも段組みされない | 受け入れる。図は素の SVG なので、スクリプト無しでも表示される |
 | 画像 | パス参照の画像は既定で外部に残る | 完全に自己完結させたい場合は `embedImages` を使う |
 | 分離 JSON | HTML の外で編集したい場合や差分を小さくしたい場合には有用 | 任意の出力 (`.gospelo.json`、同じエンベロープ)。配布物には含めない |
 | 以前の形式 | 読めるようにすると 2 つのコード経路を保守することになる | 読まない。移行は Markdown からの再 `import` で、以前のファイルもすべて Markdown を内部に持っている (`docs/MIGRATION_ja.md`) |
@@ -205,11 +205,12 @@ sequenceDiagram
 
 | 関心事 | 場所 |
 | --- | --- |
-| エンベロープのモデル、先頭読み込み、検証 | `scripts/md2html/content.py` |
-| コンテナの描画 (先頭、ページ、末尾) | `scripts/md2html/render.py` |
-| コマンドと既定のパス | `scripts/md2html.py` |
-| 版別の Mermaid 同梱とライセンス表示 | `scripts/md2html/assets.py`、`references/vendor/mermaid/<version>/` |
-| Shiki のバンドル (ビルド時のみ使用) とそのビルド手順 | `scripts/md2html/assets.py`、`references/vendor/shiki/<version>/`、`references/vendor/shiki/build/` |
+| エンベロープのモデル、先頭読み込み、検証 | `src/content.ts` |
+| コンテナの描画 (先頭、ページ、末尾) | `src/render.ts` |
+| コマンドと既定のパス | `src/cli.ts` (`scripts/md2html.mjs` にまとめる。`scripts/md2html.py` は薄いラッパー) |
+| mermaid-arch による図の描画 | `src/mermaid.ts`、`vendor/gospelo-mermaid-arch-<version>-<commit>.tgz` |
+| ブラウザ、計測、PDF | `src/measure.ts` (puppeteer-core。chrome-headless-shell は mermaid-arch の `launchBrowser` で起動) |
+| Shiki のバンドル (ビルド時のみ使用) とそのビルド手順 | `src/assets.ts`、`references/vendor/shiki/<version>/`、`references/vendor/shiki/build/` |
 | エンベロープのスキーマ (スキルに同梱) | `references/gospelo-document.schema.json` |
 | 形式の仕様 | `docs/spec/gospelo-document_ja.md` |
 | 以前のファイルからの移行 | `docs/MIGRATION_ja.md`、`scripts/extract_markdown.py` |

@@ -8,8 +8,12 @@ on:
 permissions:
   contents: read
 
+env:
+  SKILL: skills/claude/gospelo-md2html
+
 jobs:
-  test:
+  pytest:
+    # the Python parts that remain: kumihan and extract_markdown.py
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,27 +21,50 @@ jobs:
       # the kumihan golden SVGs record the Python and library versions they were generated with
       - name: pytest
         run: >
-          uv run --python 3.14.9
-          --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright
-          --with python-pptx --with pillow --with brotli
+          uv run --python 3.13.1
+          --with pytest --with brotli
           --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py
-          pytest tests -q
+          pytest tests/kumihan tests/test_extract_markdown.py -q
 
-  smoke:
+  node:
     runs-on: ubuntu-latest
-    env:
-      MD2HTML: skills/claude/gospelo-md2html/scripts/md2html.py
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # the tests import the TypeScript sources directly (type stripping, Node 22.18+)
+          node-version: '24'
+      - name: Install the npm packages
+        working-directory: ${{ env.SKILL }}
+        run: npm ci
+      - name: The committed bundle matches the sources
+        working-directory: ${{ env.SKILL }}
+        run: |
+          npm run build
+          git diff --exit-code -- scripts/md2html.mjs
+      - name: Install chrome-headless-shell
+        run: node "$SKILL/scripts/md2html.mjs" setup
+      - name: Tests
+        # a glob, not the directory: Node 24 takes a directory argument as a module path
+        run: node --test --test-concurrency=1 'tests/ts/*.test.ts'
+
+  smoke:
+    needs: node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: astral-sh/setup-uv@v6
-      - name: Install Chromium
-        run: uv run --with playwright playwright install --with-deps chromium
+      - name: Set up through the Python wrapper
+        run: uv run "$SKILL/scripts/md2html.py" setup
       - name: Import fixtures (16:9 and A4)
         run: |
           mkdir -p out
           for page in 16x9 a4; do
-            uv run "$MD2HTML" import tests/fixtures/tall_flowchart.md --page "$page" -o "out/flowchart-$page.gospelo.html" --force
-            uv run "$MD2HTML" import tests/fixtures/code_blocks.md --page "$page" -o "out/code-$page.gospelo.html" --force
+            uv run "$SKILL/scripts/md2html.py" import tests/fixtures/tall_flowchart.md --page "$page" -o "out/flowchart-$page.gospelo.html" --force
+            uv run "$SKILL/scripts/md2html.py" import tests/fixtures/code_blocks.md --page "$page" -o "out/code-$page.gospelo.html" --force
           done
       - name: Code is highlighted and the Shiki library is not shipped
         run: |
@@ -46,26 +73,14 @@ jobs:
             if [ "$n" -ne 2 ]; then echo "$f: expected 2 highlighted blocks, got $n"; exit 1; fi
             if grep -q 'data-shiki-version' "$f"; then echo "$f: Shiki library was shipped"; exit 1; fi
           done
+      - name: Diagrams are SVG drawn by mermaid-arch
+        run: |
+          for f in out/flowchart-*.gospelo.html; do
+            grep -q '<svg id="md2html-mermaid-1"' "$f" || { echo "$f: diagram not drawn"; exit 1; }
+            if grep -q '<pre class="mermaid">' "$f"; then echo "$f: undrawn diagram source"; exit 1; fi
+          done
       - name: Rebuild a generated document in place
-        run: uv run "$MD2HTML" build out/code-16x9.gospelo.html
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Build the Mermaid ELK layout bundle (user cache, not committed)
-        run: uv run "$MD2HTML" setup --elk-only
-      - name: Import the ELK fixture; the ELK library is not shipped in prerender mode
-        run: |
-          uv run "$MD2HTML" import tests/fixtures/elk_flowchart.md --page a4 -o out/elk-a4.gospelo.html --force
-          # figures.js names the attribute in a selector; the tag itself has `=`
-          if grep -q -e 'data-mermaid-layout-elk-version=' -e 'window.__mermaidLayoutElk=' out/elk-a4.gospelo.html; then
-            echo "ELK bundle was shipped"; exit 1
-          fi
-      - name: ELK tests with Chromium and the built bundle (nothing may be skipped)
-        run: |
-          uv run --with pytest --with markdown-it-py --with mdit-py-plugins --with playwright \
-            --with python-pptx --with pillow --with brotli --with fonttools \
-            pytest tests/test_mermaid_elk.py -q -rs | tee elk-tests.txt
-          if grep -q SKIPPED elk-tests.txt; then echo "ELK tests were skipped"; exit 1; fi
+        run: uv run "$SKILL/scripts/md2html.py" build out/code-16x9.gospelo.html --pdf out/code-16x9.pdf --pptx out/code-16x9.pptx
       - uses: actions/upload-artifact@v4
         if: always()
         with:

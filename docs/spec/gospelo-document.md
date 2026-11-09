@@ -40,12 +40,11 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 { ...envelope... }
 </script>
 <style>...@font-face subsets (layout.embedFonts), computed variables, base.css...</style>
+<style>...Font Awesome Free (only when a Mermaid source uses fa: icons)...</style>
 </head>
 <body>
-<section class="page" data-page-id="p01">...</section>
+<section class="page" data-page-id="p01">...</section>   (Mermaid diagrams as <svg> inside the pages)
 ...
-<!-- Mermaid <version> | MIT License | ... -->
-<script>...mermaid.min.js (only when layout.mermaidLib is embed; prerender writes SVG into the pages)...</script>
 <script>...figures.js...</script>
 <script>...page numbering...</script>
 </body>
@@ -59,7 +58,7 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 3. The `<html>` element MUST carry `data-gospelo-document="1"` and SHOULD carry `lang` equal to `meta.lang`.
 4. The envelope MUST be embedded exactly once as `<script type="application/json" id="gospelo-document">` inside `<head>`, before any `<style>` element and before any other `<script>` element. A reader MAY stop reading the file at the first `</script>` after that opening tag.
 5. Inside the envelope block every `<` MUST be written as `\u003c`. Consequently the sequence `</script` cannot occur inside the block and the first `</script>` after the opening tag is its end. Writers SHOULD also escape `>` as `\u003e` and `&` as `\u0026`.
-6. Large static assets (the Mermaid library, `figures.js`, page numbering) MUST be placed at the end of `<body>`, after the rendered pages. The Mermaid library, when present, is preceded by its license notice comment and comes before `figures.js`.
+6. Static scripts (`figures.js`, page numbering) MUST be placed at the end of `<body>`, after the rendered pages. Files written by gospelo-md2html 0.6 and earlier with `layout.mermaidLib` `embed` also carry the Mermaid library there, preceded by its license notice comment and before `figures.js`; 0.7.0 and later never write it.
 7. Rendered pages MUST be regenerated from the envelope on every build. A reader MUST NOT treat the rendered DOM as source data.
 8. Each rendered page MUST carry `data-page-id` equal to the `id` of the page it renders, so that reports and edits can refer to both.
 9. A writer MAY additionally include `<script type="text/markdown" id="gospelo-source">` with the raw Markdown for human reading. It is informational: the source of truth is the source page in the envelope.
@@ -70,7 +69,7 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 {
   "format": "gospelo-document",
   "version": 1,
-  "generator": "gospelo-md2html 0.2.0",
+  "generator": "gospelo-md2html 0.7.0",
   "meta": { "title": "...", "date": "2026-09-21", "source": "report.md", "lang": "ja" },
   "layout": { "page": "16x9", "fontSize": "14pt", "columns": "two" },
   "pages": [
@@ -134,9 +133,10 @@ A conforming writer:
 ## 8. Assets
 
 - Images are referenced by `src` as a path relative to the file, or embedded as a `data:` URI when `layout.embedImages` is true.
-- Mermaid diagrams are always stored as source in the envelope. With `layout.mermaidLib` `prerender` (default) the writer draws each diagram during its verify pass and places the resulting `<svg>` inside the rendered figure; no library is shipped. With `embed` the library is inlined at the end of `<body>` and the browser draws the source; with `link` a `mermaid-<version>.min.js` next to the file is referenced (with its `LICENSE.mermaid-<version>.txt`). The version used is recorded in `layout.mermaidVersion` and reused on every rebuild, in every mode.
+- Mermaid diagrams are always stored as source in the envelope. The writer draws each diagram while building (gospelo-md2html 0.7.0 and later: with mermaid-arch, Mermaid 12) and places the resulting `<svg>` inside the rendered figure; no library is shipped. `layout.mermaidLib` is `prerender`; the values `embed` (library inlined at the end of `<body>`) and `link` (a sibling `mermaid-<version>.min.js`) appear only in files from 0.6 and earlier, and 0.7.0 stops on them rather than rewriting them silently. The Mermaid version used is recorded in `layout.mermaidVersion`; a writer that draws with another version stops on such a file unless told to accept the change (`--mermaid-version`), because diagram sizes, and so pagination, depend on it.
+- Diagrams may use icons from an icon pack the writer is given (for example AWS Architecture Icons, `icon: "aws:lambda"`). Only the drawn `<svg>` is written; the icon pack itself, and the location it was read from, are never stored in the file.
 - Code blocks are always stored as plain lines in the envelope. When a `code` block has a `lang` the writer can highlight, the rendered `<pre class="code" data-highlighted="true">` holds the lines wrapped in `<span style="color:...">` elements; no highlighter is shipped. Readers MUST take code from the envelope, not from the rendered markup.
-- Fonts: when `layout.embedFonts` is true (default) the writer embeds subsets of its bundled fonts (BIZ UDPGothic Regular and Bold, BIZ UDGothic Regular; SIL OFL 1.1), cut to the characters the document uses, as `@font-face` data URIs inside the `<style>` element, before the computed variables. Only the bundled families that appear in `layout.fontFamily` / `layout.codeFontFamily` (or the default stacks) are embedded; any other family named there is expected on the viewer's machine. Besides these, only the Font Awesome subset needed by `fa:` icons in Mermaid sources is embedded.
+- Fonts: when `layout.embedFonts` is true (default) the writer embeds subsets of its bundled fonts (BIZ UDPGothic Regular and Bold, BIZ UDGothic Regular; SIL OFL 1.1), cut to the characters the document uses, as `@font-face` data URIs inside the `<style>` element, before the computed variables. Only the bundled families that appear in `layout.fontFamily` / `layout.codeFontFamily` (or the default stacks) are embedded; any other family named there is expected on the viewer's machine. Besides these, Font Awesome Free (stylesheet with its fonts as data URIs) is embedded only when a Mermaid source uses `fa:` icons.
 
 ## 9. Files written before this format
 

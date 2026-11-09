@@ -1,24 +1,35 @@
 #!/usr/bin/env python3
 """Draw the layout figures used by docs/DESIGN.md and docs/DESIGN_ja.md.
 
-Every dimension comes from the tool's own formats.py / scale.py, so the
-figures are to scale. SVGs are written next to this script and rendered to
-PNG (2x) with Playwright:
+Every dimension comes from the tool's own src/formats.ts / src/scale.ts (read
+through Node, which runs the TypeScript sources directly; Node 22.18 or
+later), so the figures are to scale. SVGs are written next to this script and
+rendered to PNG (2x) with Playwright:
 
     uv run --with playwright python assets/design/make_figures.py
 """
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-sys.path.insert(0, str(ROOT / "skills" / "claude" / "gospelo-md2html" / "scripts"))
+SRC = ROOT / "skills" / "claude" / "gospelo-md2html" / "src"
 
-from md2html.formats import MM_TO_PX, get_format  # noqa: E402
-from md2html.scale import build_metrics  # noqa: E402
+# the Metrics values the figures use, computed by md2html itself
+_METRICS_JS = """
+const [{ getFormat }, { buildMetrics }] = await Promise.all([import(process.argv[1]), import(process.argv[2])])
+const m = buildMetrics(getFormat(process.argv[3]), null, 1.25, null, 'right', 0.5)
+const keys = ['pageWPx', 'pageHPx', 'marginVPx', 'marginHPx', 'contentWPx', 'contentHPx', 'headerBandPx',
+              'headerGapPx', 'col2Px', 'gutterPx']
+console.log(JSON.stringify({ ...Object.fromEntries(keys.map((k) => [k, m[k]])), fmt: m.fmt }))
+"""
 
 FONT = "'Helvetica Neue', Helvetica, Arial, 'Hiragino Sans', 'Noto Sans JP', sans-serif"
 INK = "#2C2C2C"
@@ -156,9 +167,27 @@ class SVG:
         path.write_text(svg, encoding="utf-8")
 
 
-def metrics(page_id: str):
-    fmt = get_format(page_id)
-    return build_metrics(fmt, None, 1.25, None, "right", 0.5)
+def metrics(page_id: str) -> SimpleNamespace:
+    node = shutil.which("node")
+    if node is None:
+        raise SystemExit("node not found on PATH; Node.js 22.18 or later is needed to read md2html's metrics")
+    r = subprocess.run(
+        [node, "--input-type=module", "-e", _METRICS_JS, "--",
+         (SRC / "formats.ts").as_uri(), (SRC / "scale.ts").as_uri(), page_id],
+        capture_output=True, text=True, check=False,
+    )
+    if r.returncode != 0:
+        raise SystemExit(f"reading md2html's metrics failed:\n{r.stderr.strip()}")
+    d = json.loads(r.stdout)
+    f = d["fmt"]
+    fmt = SimpleNamespace(width_mm=f["widthMm"], height_mm=f["heightMm"], margin_v_mm=f["marginVMm"],
+                          margin_h_mm=f["marginHMm"], is_slide=f["isSlide"])
+    return SimpleNamespace(
+        fmt=fmt, page_w_px=d["pageWPx"], page_h_px=d["pageHPx"], margin_v_px=d["marginVPx"],
+        margin_h_px=d["marginHPx"], content_w_px=d["contentWPx"], content_h_px=d["contentHPx"],
+        header_band_px=d["headerBandPx"], header_gap_px=d["headerGapPx"], col2_px=d["col2Px"],
+        gutter_px=d["gutterPx"],
+    )
 
 
 # --------------------------------------------------------------------------

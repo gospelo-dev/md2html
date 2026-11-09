@@ -16,7 +16,9 @@ page  = { "id": "p05", "kind": "cover|content|source", "title": "h2 の文字列
 - `pages[0]` が `kind: source` なら原文 Markdown のバックアップ。編集しない。
 - `layout` は有効なレイアウト設定 (用紙、文字サイズ、段組、`overrides`)。用紙や文字サイズを
   変えるときはここか CLI オプションで指定する (CLI が優先)。`mermaidVersion` は生成時に使った
-  Mermaid の版で、再生成でも同じ版を使う。
+  Mermaid の版 (mermaid-arch が持つ版)。描く版と違う文書の再生成はエラーで止まり、図の大きさが
+  変わってよい場合だけ `--mermaid-version` で受け入れる。Mermaid 図はエンベロープでは
+  `{"type": "mermaid", "source": "..."}` のソースだけを持ち、描いた SVG は再生成のたびに作り直す。
 - スライド形式では `title` がヘッダーに出る。文書形式では null。
 - `continued: true` は前ページと同じ h2 の続き (ヘッダーに「(続き)」が付く)。
 - JSON 内では `<` `>` `&` が `\u003c` `\u003e` `\u0026` にエスケープされている。書き戻すときも

@@ -1,20 +1,17 @@
 # Third-party notices
 
-This repository vendors the following third-party assets under
-`skills/claude/gospelo-md2html/references/vendor/`. They are redistributed
-unmodified (except that the Font Awesome CSS font URL is rewritten to a data
-URI at HTML generation time), apart from Shiki, which is a bundle built from
-the unmodified npm packages (see below). The Mermaid ELK layout is not
-vendored: the repository carries only its build recipe, and each user builds
-the bundle on their own machine (see below).
+This repository vendors the following third-party assets in
+`skills/claude/gospelo-md2html/`. They are redistributed unmodified, apart
+from Shiki, which is a bundle built from the unmodified npm packages (see
+below).
 
 | Asset | Version | License | Source |
 | --- | --- | --- | --- |
-| `mermaid/<version>/mermaid.min.js` | Mermaid 11.12.2 | MIT (Copyright (c) 2014-2025 Knut Sveidqvist) | https://github.com/mermaid-js/mermaid |
-| `shiki/<version>/shiki.min.js` | Shiki 4.4.3 (bundle of `shiki`, its `@shikijs/*` packages, TextMate grammars and the `github-light-high-contrast` theme) | MIT (Copyright (c) 2021 Pine Wu, (c) 2023 Anthony Fu); the bundled dependencies, grammars and theme are MIT or ISC | https://github.com/shikijs/shiki |
-| `fontawesome.min.css`, `fa-solid.min.css` | Font Awesome Free 6.7.2 | MIT (CSS/code) | https://github.com/FortAwesome/Font-Awesome |
-| `fa-solid-900.woff2` | Font Awesome Free 6.7.2 | SIL OFL 1.1 (font), icons CC BY 4.0 | https://fontawesome.com/license/free |
-| `fonts/bizud/BIZUDPGothic-{Regular,Bold}.woff2`, `fonts/bizud/BIZUDGothic-{Regular,Bold}.woff2` | BIZ UDGothic / BIZ UDPGothic (Google Fonts release) | SIL OFL 1.1 (Copyright 2022 The BIZ UDGothic Project Authors; no Reserved Font Name), text in `fonts/bizud/OFL.txt` | https://github.com/googlefonts/morisawa-biz-ud-gothic |
+| `vendor/gospelo-mermaid-arch-<version>-<commit>.tgz` (`@gospelo/mermaid-arch`) | 0.1.0 (commit recorded in the `.txt` next to it) | MIT (gospelo-dev) | https://github.com/gospelo-dev/mermaid-arch |
+| inside it: `vendor/mermaid/<version>/mermaid.min.js` | Mermaid 12.3.0 | MIT (Copyright (c) 2014-2025 Knut Sveidqvist) | https://github.com/mermaid-js/mermaid |
+| inside it: `vendor/fontawesome/<version>/` (`all.min.css` and webfonts) | Font Awesome Free 6.7.2 | Icons CC BY 4.0, fonts SIL OFL 1.1, code MIT | https://fontawesome.com/license/free |
+| `references/vendor/shiki/<version>/shiki.min.js` | Shiki 4.4.3 (bundle of `shiki`, its `@shikijs/*` packages, TextMate grammars and the `github-light-high-contrast` theme) | MIT (Copyright (c) 2021 Pine Wu, (c) 2023 Anthony Fu); the bundled dependencies, grammars and theme are MIT or ISC | https://github.com/shikijs/shiki |
+| `references/vendor/fonts/bizud/BIZUDPGothic-{Regular,Bold}.woff2`, `references/vendor/fonts/bizud/BIZUDGothic-{Regular,Bold}.woff2` | BIZ UDGothic / BIZ UDPGothic (Google Fonts release) | SIL OFL 1.1 (Copyright 2022 The BIZ UDGothic Project Authors; no Reserved Font Name), text in `fonts/bizud/OFL.txt` | https://github.com/googlefonts/morisawa-biz-ud-gothic |
 
 The BIZ UD files are the unmodified TTFs of the Google Fonts release converted
 to WOFF2 (a lossless container change). At build time the tool subsets them to
@@ -23,65 +20,32 @@ the OFL permits subsetting and embedding, and requires no attribution inside
 the document. Section 5 of the OFL says the font cannot be sold by itself; it
 travels inside the documents you produce, which is permitted.
 
-## Mermaid: per-version vendoring
+## mermaid-arch: diagram drawing
 
-The vendored copy is the rendering engine in every mode: the measurement and
-verify passes load it into headless Chromium to draw each diagram (its size
-drives pagination). In the default `prerender` mode the drawn SVG is what ends
-up in the document; in `embed` / `link` mode the library itself is shipped as
-well. Mermaid is kept per version as `mermaid/<version>/mermaid.min.js` with
-the MIT text next to it as `mermaid/<version>/LICENSE.txt`, so that several
-versions can coexist. A generated HTML records the version it was paginated with in its
-embedded layout (`mermaidVersion`) and is rebuilt with that same version;
-new documents default to the newest vendored version. `--mermaid-version X.Y.Z`
-selects one explicitly.
+mermaid-arch is installed from the tarball in `vendor/` (referenced as
+`file:vendor/...` in `package.json`; the `package-lock.json` integrity pins
+its contents). The `.txt` next to the tarball records the source commit, how
+it was built, and its sha256 and npm integrity; replace both together when
+updating to another commit.
 
-To add a version: create `mermaid/<version>/`, copy the unmodified
-`dist/mermaid.min.js` of that release and its `LICENSE` file (as `LICENSE.txt`),
-and add a row to the table above. The directory name must match the version
-string inside the bundle; the tool checks this.
+mermaid-arch carries its own vendored Mermaid (with `MANIFEST.json` and the
+MIT `LICENSE`) and Font Awesome Free (with its license text). The tool loads
+Mermaid into a page of headless Chrome to draw every diagram; the generated
+document contains the drawn SVG, never the library, so no Mermaid notice is
+needed in the document.
 
-## Mermaid ELK layout
-
-Diagrams that ask for the ELK layout (`layout: elk` in front matter or an
-`%%{init}%%` directive, or `flowchart-elk`) are laid out by
-`@mermaid-js/layout-elk` (MIT), which runs elkjs (the Eclipse Layout Kernel
-compiled to JavaScript, **EPL-2.0**), plus d3-shape and d3-path (ISC).
-
-| Package | Version | License | Source |
-| --- | --- | --- | --- |
-| @mermaid-js/layout-elk | 0.2.0 | MIT (Copyright (c) 2014 - 2022 Knut Sveidqvist) | https://github.com/mermaid-js/mermaid |
-| elkjs | 0.9.3 | EPL-2.0 | https://github.com/kieler/elkjs |
-| d3-shape, d3-path | as resolved by npm (d3 ^7.9.0) | ISC (Copyright Mike Bostock) | https://github.com/d3 |
-
-None of these is in the repository. `references/vendor/mermaid-layout-elk/build/`
-holds only the recipe (`entry.mjs`, and `package.json` pinning layout-elk,
-elkjs and esbuild). `md2html.py setup --elk` copies it to a temporary
-directory, runs `npm install --ignore-scripts` and esbuild there, and writes
-`mermaid-layout-elk.min.js` (one IIFE exposing `window.__mermaidLayoutElk`)
-with `LICENSE.txt` (the license texts of the four packages, taken from the
-installed packages) into the user cache,
-`${XDG_CACHE_HOME:-~/.cache}/gospelo-md2html/mermaid-layout-elk/<version>/`.
-figures.js registers the layouts with `mermaid.registerLayoutLoaders()`. The
-layout-elk version is paired with each vendored Mermaid version in
-`MERMAID_LAYOUT_ELK` (`scripts/md2html/assets.py`): 0.2.0 is the layout-elk
-release that was current when Mermaid 11.12.2 was released.
-
-Since the repository does not contain elkjs, publishing it does not distribute
-elkjs. A generated document contains elkjs only in `embed` / `link` mode and
-only when one of its diagrams asks for ELK; whoever passes such a document on
-distributes elkjs in object form. The EPL-2.0 then requires the license text
-and a statement of where the source code is available
-(https://github.com/kieler/elkjs); the tool writes both in front of the bundle
-(see below). In the default `prerender` mode the document holds only the SVG
-that ELK laid out, which is output of the program and not covered by the EPL.
+AWS Architecture Icons are not part of this repository or of mermaid-arch.
+They are read at build time from the user's own `Icon-package_*.zip`
+(`--icons-zip`), used only to draw the diagrams, and never written out: the
+generated document contains the drawn SVG only, which is how AWS permits the
+icons to be used (as part of architecture diagrams).
 
 ## Shiki: build-only syntax highlighter
 
-Shiki colours code blocks that name a language. Like Mermaid in `prerender`
-mode, it runs only in the measurement and verify passes inside Chromium; the
-generated document contains the coloured `<span>` markup, never the library,
-so no Shiki notice is needed in the document.
+Shiki colours code blocks that name a language. It runs only in the
+measurement and verify passes inside the browser; the generated document
+contains the coloured `<span>` markup, never the library, so no Shiki notice is
+needed in the document.
 
 `shiki/<version>/shiki.min.js` is an IIFE built with esbuild from
 `shiki/build/entry.mjs`, which loads the JavaScript regex engine (no WASM), the
@@ -94,35 +58,33 @@ written uncoloured.
 
 ## Notices carried by generated documents
 
-In the default `prerender` mode the generated HTML contains the SVG that
-Mermaid.js drew, but not the library itself, so no Mermaid notice is needed in
-the document. By default it also contains subsets of the BIZ UD fonts (OFL,
-no notice required in the document; `--no-embed-fonts` omits them). In `embed`
-and `link` mode the HTML embeds (or links) Mermaid.js, and whenever `fa:` icons
-are used it embeds the Font Awesome Free Solid font. Documents you distribute
-in those cases carry the licenses' attribution requirements:
+The generated HTML contains the SVG drawn by Mermaid, but not the library
+itself, so no Mermaid notice is needed in the document. By default it also
+contains subsets of the BIZ UD fonts (OFL, no notice required in the document;
+`--no-embed-fonts` omits them). Whenever a diagram label uses `fa:` icons, it
+embeds Font Awesome Free (the stylesheet with its fonts as data URIs); the CSS
+header comment with the license summary and copyright is kept in the embedded
+stylesheet. Documents that show such icons carry the CC BY 4.0 attribution
+that comment provides.
 
-- Mermaid: the tool writes an HTML comment with the version, the copyright line
-  and the full MIT permission notice immediately before the library, in both
-  `embed` and `link` mode. In `link` mode it also copies
-  `LICENSE.mermaid-<version>.txt` next to `mermaid-<version>.min.js`.
-- Mermaid ELK layout (only when a diagram asks for ELK): the tool writes an
-  HTML comment with the version and the full `LICENSE.txt` (MIT, EPL-2.0 with
-  the elkjs source location, ISC) immediately before the bundle. In `link`
-  mode it also copies `LICENSE.mermaid-layout-elk-<version>.txt` next to
-  `mermaid-layout-elk-<version>.min.js`. In `prerender` mode only the drawn SVG
-  is in the document.
-- Font Awesome: the CSS header comment (license summary and copyright) is kept
-  in the embedded stylesheet.
+## Runtime dependencies
 
-Runtime dependencies resolved by `uv` at execution time (not vendored):
+Installed by `npm ci` (`md2html.py setup`) from the skill's `package-lock.json`;
+not vendored in the repository, except mermaid-arch (above).
 
-| Package | License |
-| --- | --- |
-| markdown-it-py | MIT |
-| mdit-py-plugins | MIT |
-| playwright (Python) | Apache-2.0 (Chromium is downloaded by Playwright under its own licenses) |
-| python-pptx (PPTX export) | MIT |
-| Pillow (pulled in by python-pptx) | MIT-CMU (HPND) |
-| fonttools (font subsetting) | MIT |
-| Brotli (WOFF2 compression for fonttools) | MIT |
+| Package | Version | License |
+| --- | --- | --- |
+| @gospelo/mermaid-arch | 0.1.0 | MIT |
+| markdown-it | 15.0.3 | MIT |
+| puppeteer-core | 25.16.0 | Apache-2.0 |
+| subset-font (font subsetting; uses harfbuzzjs, MIT, and fontverter, BSD-3-Clause) | 2.9.0 | BSD-3-Clause |
+| fflate (PPTX packaging) | 0.8.3 | MIT |
+
+chrome-headless-shell is downloaded by `setup` into puppeteer's cache with
+`@puppeteer/browsers` (Apache-2.0), under the Chromium licenses. It is not
+redistributed by this repository.
+
+The Python scripts used by md2html (`scripts/md2html.py`, a wrapper that runs
+the Node.js CLI, `scripts/extract_markdown.py` and `scripts/install.py`) use the
+standard library only. `scripts/kumihan/` is not used by md2html; its
+dependencies are resolved by `uv` and not vendored.

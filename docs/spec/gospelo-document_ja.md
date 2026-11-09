@@ -40,12 +40,11 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 { ...エンベロープ... }
 </script>
 <style>...@font-face のサブセット (layout.embedFonts)、計算済み変数、base.css...</style>
+<style>...Font Awesome Free (Mermaid ソースが fa: アイコンを使うときだけ)...</style>
 </head>
 <body>
-<section class="page" data-page-id="p01">...</section>
+<section class="page" data-page-id="p01">...</section>   (Mermaid 図はページの中に <svg> として入る)
 ...
-<!-- Mermaid <version> | MIT License | ... -->
-<script>...mermaid.min.js (layout.mermaidLib が embed のときだけ。prerender はページに SVG を書く)...</script>
 <script>...figures.js...</script>
 <script>...ページ番号...</script>
 </body>
@@ -59,7 +58,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 3. `<html>` 要素は `data-gospelo-document="1"` を持たなければならず、`meta.lang` と同じ `lang` を持つべきである。
 4. エンベロープは `<head>` 内に `<script type="application/json" id="gospelo-document">` としてちょうど 1 回、すべての `<style>` と他のすべての `<script>` より前に埋め込まなければならない。読み手はこの開始タグの後の最初の `</script>` で読み込みを打ち切ってよい。
 5. エンベロープ内のすべての `<` は `\u003c` と書かなければならない。これにより `</script` の並びはブロック内に現れず、開始タグの後の最初の `</script>` が終端になる。書き手は `>` を `\u003e`、`&` を `\u0026` にもエスケープすべきである。
-6. 大きな静的資産 (Mermaid ライブラリ、`figures.js`、ページ番号スクリプト) は `<body>` の末尾、描画済みページの後に置かなければならない。Mermaid ライブラリがある場合はその直前にライセンス表示のコメントを置き、`figures.js` より前に置く。
+6. 静的なスクリプト (`figures.js`、ページ番号スクリプト) は `<body>` の末尾、描画済みページの後に置かなければならない。gospelo-md2html 0.6 以前が `layout.mermaidLib` を `embed` にして書いたファイルは、そこに Mermaid ライブラリも持つ (直前にライセンス表示のコメント、`figures.js` より前)。0.7.0 以降は書かない。
 7. 描画済みページはビルドのたびにエンベロープから再生成しなければならない。読み手は描画済み DOM をソースデータとして扱ってはならない。
 8. 各描画済みページは、対応するページの `id` と同じ `data-page-id` を持たなければならない。レポートや編集が両者を参照できるようにするため。
 9. 書き手は人が読むための `<script type="text/markdown" id="gospelo-source">` を追加してもよい。これは参考情報であり、正本はエンベロープ内のソースページである。
@@ -70,7 +69,7 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 {
   "format": "gospelo-document",
   "version": 1,
-  "generator": "gospelo-md2html 0.2.0",
+  "generator": "gospelo-md2html 0.7.0",
   "meta": { "title": "...", "date": "2026-09-21", "source": "report.md", "lang": "ja" },
   "layout": { "page": "16x9", "fontSize": "14pt", "columns": "two" },
   "pages": [
@@ -134,9 +133,10 @@ glTF と同じく、単体ファイル、分離 JSON、パッケージ (予約) 
 ## 8. 資産
 
 - 画像は `src` でファイルからの相対パスを参照するか、`layout.embedImages` が真なら `data:` URI で埋め込む。
-- Mermaid 図は常にソースとしてエンベロープに保持する。`layout.mermaidLib` が `prerender` (既定) なら、書き手は検証パスで各図を描き、その `<svg>` を描画済みの図の中に置く。ライブラリは同梱しない。`embed` では `<body>` 末尾にライブラリを埋め込みブラウザがソースを描く。`link` ではファイルの隣の `mermaid-<version>.min.js` を参照する (`LICENSE.mermaid-<version>.txt` を併置)。使った版はどのモードでも `layout.mermaidVersion` に記録し、再生成のたびに同じ版を使う。
+- Mermaid 図は常にソースとしてエンベロープに保持する。書き手はビルドの中で各図を描き (gospelo-md2html 0.7.0 以降は mermaid-arch、Mermaid 12)、その `<svg>` を描画済みの図の中に置く。ライブラリは同梱しない。`layout.mermaidLib` は `prerender`。`embed` (`<body>` 末尾にライブラリを埋め込む) と `link` (隣の `mermaid-<version>.min.js` を参照) は 0.6 以前のファイルにだけ現れる値で、0.7.0 はそれを黙って書き換えず止まる。使った Mermaid の版は `layout.mermaidVersion` に記録する。別の版で描く書き手は、変更を受け入れる指定 (`--mermaid-version`) が無い限り、そのファイルで止まる。図の大きさ、したがってページ割りが版に依存するためである。
+- 図は、書き手に渡したアイコンパックのアイコンを使える (たとえば AWS のアーキテクチャアイコン、`icon: "aws:lambda"`)。ファイルに書くのは描いた `<svg>` だけで、アイコンパックそのものも、それを読んだ場所も保存しない。
 - コードブロックは常に素の行としてエンベロープに保持する。書き手が色付けできる `lang` を持つ `code` ブロックでは、描画済みの `<pre class="code" data-highlighted="true">` の各行が `<span style="color:...">` 要素で包まれる。ハイライタは同梱しない。読み手はコードを描画済みのマークアップからではなく、エンベロープから取らなければならない (MUST)。
-- フォント: `layout.embedFonts` が真 (既定) なら、書き手は同梱フォント (BIZ UDPGothic Regular と Bold、BIZ UDGothic Regular。SIL OFL 1.1) を文書で使う文字だけに絞ったサブセットを、`<style>` 要素の中、計算済み変数より前に `@font-face` の data URI として埋め込む。埋め込むのは `layout.fontFamily` / `layout.codeFontFamily` (または既定スタック) に現れる同梱書体だけで、そこに書かれた他の書体は閲覧側の環境にあるものとする。これ以外に埋め込むのは Mermaid ソースの `fa:` アイコンに必要な Font Awesome のサブセットだけである。
+- フォント: `layout.embedFonts` が真 (既定) なら、書き手は同梱フォント (BIZ UDPGothic Regular と Bold、BIZ UDGothic Regular。SIL OFL 1.1) を文書で使う文字だけに絞ったサブセットを、`<style>` 要素の中、計算済み変数より前に `@font-face` の data URI として埋め込む。埋め込むのは `layout.fontFamily` / `layout.codeFontFamily` (または既定スタック) に現れる同梱書体だけで、そこに書かれた他の書体は閲覧側の環境にあるものとする。これ以外では、Mermaid ソースが `fa:` アイコンを使うときだけ Font Awesome Free (スタイルシートと、data URI にしたフォント) を埋め込む。
 
 ## 9. 本形式より前に書かれたファイル
 

@@ -201,17 +201,17 @@ flowchart TB
 - **黄金比や canon による版面。** 見開きの対角線と綴じ代を前提にした設計で [B12]、片面の PDF とスライドには合わない。
 - **ベースライングリッドへの厳密な吸着。** グリッドは完全な空行で区切る必要があり [B7]、表や Mermaid の高さはグリッドに乗らない。実測で割るなら、余白を「倍数に近い値」に保つだけで十分。
 - **Z 順の 2 段。** 段落の途中で視線が左右に飛ぶ。横組の段は左から右へ読む [W6]。
-- **Mermaid ライブラリの全ファイルへの同梱。** 図はビルド時に描いて SVG として書き込み、ソースはエンベロープに残す。図は編集できたまま (直して `build`)、各ファイルに 3 MB のライブラリを持たずに済む。`--mermaid-lib embed` でブラウザ描画も選べる。
+- **Mermaid ライブラリの全ファイルへの同梱。** 図はビルド時に mermaid-arch が描いて SVG として書き込み、ソースはエンベロープに残す。図は編集できたまま (直して `build`)、各ファイルに数 MB のライブラリを持たずに済む。ブラウザで描く `--mermaid-lib embed` / `link` は廃止した。AWS アイコンを使う図をビューアで描くにはアイコンパックを同梱するしかなく、AWS はそれを認めていないため。
 - **シンタックスハイライタの同梱。** コードはビルド時に Shiki で色付けし、色は静的なマークアップとしてページに書き込む。ファイルがハイライタ本体を持つことはない。
 
 ## 9. 数値の在り処
 
 | 決めていること | 場所 (`skills/claude/gospelo-md2html/` 配下) |
 | --- | --- |
-| 用紙の寸法、外側の余白、既定の文字サイズ | `scripts/md2html/formats.py` |
-| F からの派生 (行送り、帯、段幅、図の枠) | `scripts/md2html/scale.py` |
+| 用紙の寸法、外側の余白、既定の文字サイズ | `src/formats.ts` |
+| F からの派生 (行送り、帯、段幅、図の枠) | `src/scale.ts` |
 | 内側の余白と文字倍率 (CSS の calc) | `references/base.css` |
-| 帯にする条件、分割の最小単位、段の高さ揃え | `scripts/md2html/paginate.py` |
+| 帯にする条件、分割の最小単位、段の高さ揃え | `src/paginate.ts` |
 | 図の表示サイズの式 | `references/figures.js` |
 | 規則の要約 (エージェント向け) | `references/page_formats.md`、`references/layout_rules.md` |
 | ファイル形式 | `docs/spec/gospelo-document_ja.md`、`docs/ARCHITECTURE_ja.md` |

@@ -22,8 +22,11 @@ Usage:
     python install.py --symlink           # symlink instead of copy (for development)
     python install.py --force             # replace an existing installation
 
-The skill itself runs with uv (scripts/md2html.py carries PEP 723 metadata);
-this installer only needs the Python standard library.
+The skill runs on Node.js 22.12 or later (scripts/md2html.mjs; scripts/md2html.py
+is a thin wrapper that calls it). node_modules is not copied: after installing,
+run `uv run <skill>/scripts/md2html.py setup` once in the installed copy, which
+installs the npm packages and chrome-headless-shell. This installer only needs
+the Python standard library.
 """
 
 import argparse
@@ -35,7 +38,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILL_SRC = os.path.dirname(SCRIPT_DIR)
 SKILL_NAME = os.path.basename(SKILL_SRC)
 
-IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")
+# node_modules holds machine-specific installs; `md2html.py setup` recreates it from package-lock.json
+IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "node_modules")
 
 AGENTS_BY_DIR = {
     ".claude": "Claude Code / Copilot / OpenCode",

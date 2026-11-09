@@ -1,0 +1,27 @@
+@gospelo/mermaid-arch 0.1.0
+
+file:      gospelo-mermaid-arch-0.1.0-3bd1340.tgz
+source:    https://github.com/gospelo-dev/mermaid-arch (private)
+commit:    3bd1340ec4a6e09102d247d64554bfa2b1037bd6
+built by:  mermaid-arch, from a clean worktree of the commit above
+           (npm ci --ignore-scripts, then npm pack)
+size:      390385 bytes, 46 files
+sha256:    35d78891e3d2220744a13d5f7dc0741ad48d8f361b062ceed05652b83b52eccc
+integrity: sha512-vHebxSiH1/PiSlGYKgsj9g7JOktEWb4CSWwKBwEOaNJzD9fguUhkxmMXjpX6MJN9tK4+Eajx77O5ld4oSQTFBw==
+
+Use in package.json:
+  "@gospelo/mermaid-arch": "file:vendor/gospelo-mermaid-arch-0.1.0-3bd1340.tgz",
+  "mermaid": "12.3.0"
+
+The tarball does not contain Mermaid. mermaid-arch depends on mermaid 12.3.0
+(exact) and reads node_modules/mermaid/dist/mermaid.min.js, which npm ci
+installs from the public registry. That bundle contains elkjs (EPL-2.0), so it
+is kept out of this repository: it exists only in each user's node_modules.
+mermaid-arch checks the installed version and the file's sha256 against its
+src/mermaid-manifest.json and stops with an error when they differ.
+
+The tarball holds Font Awesome Free 6.7.2 (fonts OFL-1.1, icons CC BY 4.0,
+code MIT).
+
+The integrity value above must match the one npm writes to package-lock.json.
+Replace this file together with the tarball when updating to another commit.

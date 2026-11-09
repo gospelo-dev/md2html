@@ -28,6 +28,7 @@ A Gospelo Document is always generated from Markdown. Every file the tool has ev
 
    ```bash
    S=skills/claude/gospelo-md2html/scripts/md2html.py
+   uv run $S setup      # once: npm packages and chrome-headless-shell (needs Node.js 22.12+)
    uv run $S import original.md -o new.gospelo.html --page 16x9 --font-size 14pt
    ```
 
@@ -42,7 +43,26 @@ A Gospelo Document is always generated from Markdown. Every file the tool has ev
 | `import` wrote `content.json`; `build` produced the HTML | `import` writes `<name>.gospelo.html` directly; the sidecar `.gospelo.json` is optional (`-o name.gospelo.json`) |
 | Three blocks after the Mermaid library: `page-0` (Markdown), `md2html-content`, `md2html-layout` | One envelope block `gospelo-document` at the top of `<head>`; the Markdown is `pages[0]` |
 | No format identifier | `format`, `version`, `generator` in the envelope, `<!-- gospelo-document 1 -->` on line 2, `data-gospelo-document` on `<html>` |
-| Mermaid library in `<head>` | Mermaid library and scripts at the end of `<body>`; the tool reads only the head of the file |
+| Mermaid library in `<head>` | Scripts at the end of `<body>` (diagrams are SVG from 0.7.0); the tool reads only the head of the file |
 | Extension `.html` | `.gospelo.html` (plain `.html` is still accepted as input if it contains the envelope) |
 
-Nothing changed in the page and block model: the Markdown, paper sizes, layout options and editing rules are the same. See `docs/spec/gospelo-document.md` for the format and `docs/ARCHITECTURE.md` for the file layout.
+Nothing changed in the page and block model: the Markdown, paper sizes, layout options and editing rules are the same. See [spec/gospelo-document.md](./spec/gospelo-document.md) for the format and [ARCHITECTURE.md](./ARCHITECTURE.md) for the file layout.
+
+## From the Python releases (0.2 to 0.6) to 0.7.0
+
+0.7.0 is a TypeScript rewrite on Node.js. The file format is unchanged (`format` `gospelo-document`, `version` 1), so `.gospelo.html` and `.gospelo.json` files written by 0.2 to 0.6 are read as they are. What changes is how diagrams are drawn, and that can move page breaks, so a rebuild does not happen silently:
+
+| Recorded in the old file | What `check` / `build` does | To accept the change |
+| --- | --- | --- |
+| `layout.mermaidVersion` `11.12.2` (every Python release) | stops: diagrams are now drawn by mermaid-arch with Mermaid 12.3.0, and their sizes, and so the pages, may change | `build old.gospelo.html --mermaid-version 12.3.0` |
+| `layout.mermaidLib` `embed` or `link` | stops: diagrams are always written as SVG; no Mermaid library is shipped any more | add `--mermaid-lib prerender` |
+
+Check the result before handing it on: Mermaid 12 lays flowcharts out with ELK unless the diagram says otherwise. To keep a flowchart's earlier arrangement, add `layout: dagre` to its front matter (`---` / `config:` / `layout: dagre` / `---`) or `%%{init: {"layout": "dagre"}}%%`. To re-paginate the whole document instead of only spilling overflow, add `--reflow`.
+
+Other differences:
+
+- Setup: Node.js 22.12 or later is required. `uv run <skill>/scripts/md2html.py setup` installs the npm packages and chrome-headless-shell (instead of Playwright's Chromium). `scripts/md2html.py` still takes the same subcommands and options.
+- Diagrams with AWS icons are new (`--icons-zip <path to Icon-package_*.zip>`).
+- A link inside a paragraph that was split across pages now keeps its URL; the Python releases wrote `[text]()` for it. Rebuilding a document whose envelope already contains such an empty link does not restore the URL; fix the text in the envelope, or re-import from the Markdown.
+- `fa:` icons in diagram labels now embed Font Awesome Free with all its styles (about 0.5 MB instead of about 0.2 MB).
+- The `generator` written into the envelope is `gospelo-md2html 0.7.0`.

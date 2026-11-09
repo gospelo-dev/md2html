@@ -201,17 +201,17 @@ Two cases cannot be split. A table whose single row is taller than the page (a h
 - **Golden-ratio and canon-based page construction.** Designed around the diagonals and binding margin of a two-page spread [B12]; it does not fit single-sided PDFs and slides.
 - **Strict snapping to a baseline grid.** A grid must be divided by whole empty lines [B7], and tables and Mermaid diagrams do not land on it. With measured heights, keeping spacing close to multiples of the line height is enough.
 - **Z-order two columns.** The eye would jump left and right mid-paragraph; columns in horizontal writing read left to right [W6].
-- **Shipping the Mermaid library in every file.** Diagrams are drawn during the build and written as SVG; the source stays in the envelope, so they remain editable (edit, then `build`) without a 3 MB library in each file. `--mermaid-lib embed` keeps browser-side drawing as an option.
+- **Shipping the Mermaid library in every file.** Diagrams are drawn during the build by mermaid-arch and written as SVG; the source stays in the envelope, so they remain editable (edit, then `build`) without a library of several MB in each file. Browser-side drawing (`--mermaid-lib embed` / `link`) was removed: a diagram with AWS icons could only be drawn in the viewer by shipping the icon pack, which AWS does not permit.
 - **Shipping a syntax highlighter.** Code is colored by Shiki during the build and the colors are written into the page as static markup; the file never carries the highlighter.
 
 ## 9. Where the numbers live
 
 | Decision | Location (under `skills/claude/gospelo-md2html/`) |
 | --- | --- |
-| Paper sizes, outer margins, default font sizes | `scripts/md2html/formats.py` |
-| Everything derived from F (line height, bands, column width, figure boxes) | `scripts/md2html/scale.py` |
+| Paper sizes, outer margins, default font sizes | `src/formats.ts` |
+| Everything derived from F (line height, bands, column width, figure boxes) | `src/scale.ts` |
 | Inner spacing and type scale (CSS calc) | `references/base.css` |
-| Band rules, minimum fragments, column balancing | `scripts/md2html/paginate.py` |
+| Band rules, minimum fragments, column balancing | `src/paginate.ts` |
 | Figure sizing formula | `references/figures.js` |
 | Rule summaries for agents | `references/page_formats.md`, `references/layout_rules.md` |
 | File format | `docs/spec/gospelo-document.md`, `docs/ARCHITECTURE.md` |

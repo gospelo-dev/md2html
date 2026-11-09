@@ -1,0 +1,33 @@
+{
+  "name": "gospelo-md2html",
+  "version": "0.7.0",
+  "private": true,
+  "description": "Markdown + Mermaid to paginated HTML, PDF and PPTX (Gospelo Document)",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "md2html": "scripts/md2html.mjs"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=scripts/md2html.mjs --external:@gospelo/mermaid-arch --external:puppeteer-core --external:fflate --external:subset-font --external:markdown-it --external:mermaid --banner:js=\"#!/usr/bin/env node\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build --silent && node --test --test-concurrency=1 '../../../tests/ts/*.test.ts'"
+  },
+  "dependencies": {
+    "@gospelo/mermaid-arch": "file:vendor/gospelo-mermaid-arch-0.1.0-3bd1340.tgz",
+    "fflate": "0.8.3",
+    "markdown-it": "15.0.3",
+    "mermaid": "12.3.0",
+    "puppeteer-core": "25.16.0",
+    "subset-font": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "14.2.0",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

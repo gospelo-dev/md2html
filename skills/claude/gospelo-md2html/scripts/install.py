@@ -120,7 +120,7 @@ def main():
 
     if ok:
         print("\nDone. Restart your agent session to pick up the new skill.")
-        print("First run only: uv run <skill>/scripts/md2html.py setup   (installs Chromium)")
+        print("First run only: uv run <skill>/scripts/md2html.py setup   (installs the npm packages and chrome-headless-shell; needs Node.js 22.12+)")
     else:
         print("\nDone with skips. Re-run with --force to replace existing installs.")
     sys.exit(0 if ok else 1)

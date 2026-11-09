@@ -1,7 +1,7 @@
 {
   "format": "gospelo-document",
   "version": 1,
-  "generator": "gospelo-md2html 0.7.0",
+  "generator": "gospelo-md2html 0.8.0",
   "meta": {
     "title": "Example",
     "date": "2026-09-21",
@@ -16,6 +16,7 @@
     "columns": null,
     "figureSide": "right",
     "splitRatio": 0.5,
+    "gutter": "2em",
     "details": "drop",
     "mermaidLib": "prerender",
     "mermaidVersion": "12.3.0",

@@ -118,13 +118,28 @@ uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/hando
   "columns": "two",
   "overrides": {
     "p07": { "columns": "single" },
+    "p08": { "columns": "split", "splitRatio": 0.4, "gutter": "3em" },
     "p08-b1": { "span": 2 },
     "p09-b0": { "maxHeightRatio": 0.7 }
   }
 }
 ```
 
-`--layout layout.json` で渡し、CLI オプションが優先されます。`overrides` はページやブロック単位の調整に使います: ページを単段にする、ブロックを幅いっぱいの帯にする (`span: 2`) か段に収める (`span: 1`)、図の高さ上限を変える、など。ページ単位の `splitRatio` は受け付けますが、まだ反映されません。文書全体の `--split-ratio` を使ってください。
+`--layout layout.json` で渡し、CLI オプションが優先されます。`overrides` はページやブロック単位の調整に使います: ページを単段にする、ページごとに split の比率や段の間隔を変える (`columns`、`figureSide`、`splitRatio`、`gutter`)、ブロックを幅いっぱいの帯にする (`span: 2`) か段に収める (`span: 1`)、図の高さ上限を変える、など。段の幅が変わるページは、その幅で文を測り直します。続きページも同じ設定を引き継ぎます。
+
+### Markdown での節ごとの段組
+
+見出しの直後の行にコメントを置くと、その見出しから、同じかより上のレベルの次の見出しまでを、その設定で組みます (スライドなら 1 枚とその続き)。段組が変わる所ではページを改め、`import` がその節のページの `overrides` として文書に記録します。
+
+```markdown
+## 構成図
+<!-- layout: columns=single -->
+
+## 料金プラン
+<!-- layout: columns=split split-ratio=0.4 gutter=3em figure-side=left -->
+```
+
+キーは `columns`、`split-ratio`、`gutter`、`figure-side`。見出しの直後以外に置いたコメント、段落の中のコメント、知らないキーや値は、import がエラーで止まります。横長の図を大きく見せたいときは `columns=single` が向きます (図が全幅で上、文が下)。
 
 ### オプション
 
@@ -139,7 +154,8 @@ uv run $S build out/handover.gospelo.json --pdf out/handover.pdf     # out/hando
 | `--header-title` | `section` | `section` (直近の h2)、`doc` (文書の h1)、`fixed:<text>` |
 | `--columns` | 横長 `two`、縦長 `single` | `two` (2 段組 (左段 → 右段)。幅いっぱいの帯あり)、`split` (図 1 枚をテキストの隣に)、`single` (単段) |
 | `--figure-side` | `right` | `split` で図を置く側 |
-| `--split-ratio` | `0.5` | `split` のテキスト段の比率 (0.4 〜 0.6) |
+| `--split-ratio` | `0.5` | `split` のテキスト段の比率 (0.4 〜 0.6。0.4 で 文 2:図 3) |
+| `--gutter` | `2em` | `two` と `split` の段の間隔。`em` (本文の文字サイズの倍数)、`px`、`mm`、`pt`。上限は本文幅の 20%。ファイルに記録される。0.8 より前は 1.5em。間隔を記録していない 0.7 のファイルは、`--gutter 1.5em` を付けないと 2em で組み直される |
 | `--details` | `drop` | `<details>` の扱い。中身が Mermaid ソースなら常に救出する |
 | `--icons-zip PATH` | | `import` / `check` / `build`: AWS のアーキテクチャアイコンの zip (`Icon-package_*.zip`)。図が `aws:` アイコンを使うときは必須で、無いとエラー (`icons-zip-missing`) で止まり、直し方を表示する。パスはファイルに記録しないので、ビルドのたびに渡す |
 | `--chrome PATH` | | chrome-headless-shell の実行ファイル (既定: `CHROME_PATH`、`PUPPETEER_EXECUTABLE_PATH`、puppeteer のキャッシュの順) |

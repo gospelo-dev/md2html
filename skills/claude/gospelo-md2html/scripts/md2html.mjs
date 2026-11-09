@@ -141,6 +141,7 @@ var SUMMARY_RE = /<summary>([\s\S]*?)<\/summary>/i;
 var MERMAID_FENCE_RE = /^```mermaid[^\n]*\n([\s\S]*?)\n```\s*$/;
 var DIAGRAM_IMG_RE = /(?:^|\n)!\[[^\]]*\]\(([^)]+)\)[ \t]*\n\s*$/;
 var PAGEBREAK = "<!-- pagebreak -->";
+var LAYOUT_COMMENT_RE = /^<!--\s*layout:([\s\S]*?)-->$/;
 var ImportNotes = class {
   droppedDetails = [];
   expandedDetails = 0;
@@ -253,8 +254,11 @@ function fold(tokens, hrBreak, notes) {
       i = j + 1;
     } else if (t === "html_block") {
       const content = strip(tok.content);
+      const lm = LAYOUT_COMMENT_RE.exec(content);
       if (content === PAGEBREAK) {
         blocks.push({ type: "pagebreak" });
+      } else if (lm) {
+        blocks.push({ type: "layout", settings: strip(lm[1]) });
       } else {
         notes.htmlBlocks += 1;
         blocks.push({ type: "html", html: content });
@@ -414,7 +418,7 @@ import { closeSync, openSync, readFileSync as readFileSync2, readSync, writeFile
 import { basename, dirname as dirname2, extname, join as join2 } from "node:path";
 
 // src/version.ts
-var VERSION = "0.7.0";
+var VERSION = "0.8.0";
 
 // src/content.ts
 var FORMAT = "gospelo-document";
@@ -780,19 +784,19 @@ var VENDORED = [
   { family: "BIZ UDGothic", weight: 700, file: "BIZUDGothic-Bold.woff2" }
 ];
 function inlineRuns(text) {
-  const runs = [];
+  const runs2 = [];
   let strong = 0;
   for (const tok of inlineTokens(text)) {
     if (tok.type === "strong_open") strong++;
     else if (tok.type === "strong_close") strong--;
-    else if (tok.type === "code_inline") runs.push(["code", tok.content]);
-    else if (tok.type === "text") runs.push([strong ? "bold" : "body", tok.content]);
+    else if (tok.type === "code_inline") runs2.push(["code", tok.content]);
+    else if (tok.type === "text") runs2.push([strong ? "bold" : "body", tok.content]);
     else if (tok.type === "html_inline") {
-      runs.push(["body", tok.content]);
-      runs.push(["bold", tok.content]);
+      runs2.push(["body", tok.content]);
+      runs2.push(["bold", tok.content]);
     }
   }
-  return runs;
+  return runs2;
 }
 function characterSets(blocks, titles, extra = "") {
   const parts = { body: [ALWAYS, extra], bold: [ALWAYS, extra], code: [ASCII, ALWAYS] };
@@ -905,6 +909,7 @@ var LAYOUT_KEYS = {
   columns: "string",
   figureSide: "string",
   splitRatio: "number",
+  gutter: "string?",
   details: "string",
   mermaidLib: "string",
   mermaidVersion: "string?",
@@ -915,7 +920,7 @@ var LAYOUT_KEYS = {
   css: "string?",
   overrides: "object"
 };
-var PAGE_OVERRIDE_KEYS = /* @__PURE__ */ new Set(["columns", "figureSide", "splitRatio"]);
+var PAGE_OVERRIDE_KEYS = /* @__PURE__ */ new Set(["columns", "figureSide", "splitRatio", "gutter"]);
 var BLOCK_OVERRIDE_KEYS = /* @__PURE__ */ new Set(["maxHeightRatio", "span"]);
 var MERMAID_LIB = "prerender";
 var Layout = class {
@@ -929,6 +934,7 @@ var Layout = class {
   columns = null;
   figureSide = "right";
   splitRatio = 0.5;
+  gutter = null;
   details = "drop";
   mermaidLib = MERMAID_LIB;
   mermaidVersion = null;
@@ -1004,8 +1010,21 @@ function validateOverrides(overrides, path) {
     if ("columns" in values && !["two", "split", "single"].includes(values.columns)) {
       throw new LayoutError(`override columns for ${repr(target)} must be two, split or single in ${path}`);
     }
+    if ("figureSide" in values && values.figureSide !== "left" && values.figureSide !== "right") {
+      throw new LayoutError(`override figureSide for ${repr(target)} must be left or right in ${path}`);
+    }
+    if ("splitRatio" in values) {
+      const r = values.splitRatio;
+      if (typeof r !== "number" || !(r >= 0.4 && r <= 0.6)) {
+        throw new LayoutError(`override splitRatio for ${repr(target)} must be a number from 0.4 to 0.6 in ${path}`);
+      }
+    }
+    if ("gutter" in values && (typeof values.gutter !== "string" || !GUTTER_SYNTAX.test(values.gutter))) {
+      throw new LayoutError(`override gutter for ${repr(target)} must be a length such as 2em, 40px, 10mm or 30pt in ${path}`);
+    }
   }
 }
+var GUTTER_SYNTAX = /^\s*[0-9]+(?:\.[0-9]+)?\s*(?:em|px|mm|pt)\s*$/;
 function buildLayout(layoutPath, cli, base, mermaidVersion2) {
   const layout = new Layout();
   const set = layout;
@@ -1042,6 +1061,10 @@ function check(layout, mermaidVersion2) {
   if (!["drop", "expand"].includes(layout.details)) {
     throw new LayoutError(`invalid details mode ${repr(layout.details)}`);
   }
+  if (layout.gutter !== null && !GUTTER_SYNTAX.test(layout.gutter)) {
+    throw new LayoutError(`invalid gutter ${repr(layout.gutter)}: expected a length such as 2em, 40px, 10mm or 30pt`);
+  }
+  validateOverrides(layout.overrides, "the layout");
   for (const [name, value] of [["fontFamily", layout.fontFamily], ["codeFontFamily", layout.codeFontFamily]]) {
     if (value !== null && (!value.trim() || /[<>{};]/.test(value))) {
       throw new LayoutError(
@@ -1407,6 +1430,200 @@ function splitInline(text, offset) {
   return [head2, tail];
 }
 
+// src/scale.ts
+var SIZE_RE = /^\s*([0-9]+(?:\.[0-9]+)?)\s*(pt|px|mm)\s*$/;
+var TITLE_BAND_FACTOR = 2;
+var FOOTER_MAX_BODY_RATIO = 0.75;
+var FOOTER_MAX_MARGIN_RATIO = 0.36;
+var SAFETY = 0.98;
+var IMAGE_RATIO_SINGLE = 0.6;
+var IMAGE_RATIO_SPLIT = 1;
+function parseFontSize(value) {
+  const m = SIZE_RE.exec(value);
+  if (!m) throw new RangeError(`invalid --font-size ${repr(value)}: expected e.g. 11pt, 14px, 3.5mm`);
+  const num = parseFloat(m[1]);
+  const unit = m[2];
+  if (num <= 0) throw new RangeError(`invalid --font-size ${repr(value)}: must be positive`);
+  if (unit === "pt") return num * PT_TO_PX;
+  if (unit === "mm") return num * MM_TO_PX;
+  return num;
+}
+var DEFAULT_GUTTER = "2em";
+var MAX_GUTTER_RATIO = 0.2;
+var GUTTER_RE = /^\s*([0-9]+(?:\.[0-9]+)?)\s*(em|px|mm|pt)\s*$/;
+function parseGutter(value, F) {
+  const m = GUTTER_RE.exec(value);
+  if (!m) throw new RangeError(`invalid gutter ${repr(value)}: expected e.g. 2.5em, 40px, 10mm, 30pt`);
+  const num = parseFloat(m[1]);
+  switch (m[2]) {
+    case "em":
+      return num * F;
+    case "mm":
+      return num * MM_TO_PX;
+    case "pt":
+      return num * PT_TO_PX;
+    default:
+      return num;
+  }
+}
+var Metrics = class _Metrics {
+  fmt;
+  F;
+  // body font px
+  titleScale;
+  columns;
+  // document default
+  figureSide;
+  splitRatio;
+  // text column fraction
+  gutterPx;
+  // gap between columns (split and two)
+  constructor(fmt2, F, titleScale, columns, figureSide, splitRatio, gutterPx) {
+    this.fmt = fmt2;
+    this.F = F;
+    this.titleScale = titleScale;
+    this.columns = columns;
+    this.figureSide = figureSide;
+    this.splitRatio = splitRatio;
+    this.gutterPx = gutterPx;
+  }
+  // ---- paper
+  get pageWPx() {
+    return this.fmt.widthMm * MM_TO_PX;
+  }
+  get pageHPx() {
+    return this.fmt.heightMm * MM_TO_PX;
+  }
+  get marginVPx() {
+    return this.fmt.marginVMm * MM_TO_PX;
+  }
+  get marginHPx() {
+    return this.fmt.marginHMm * MM_TO_PX;
+  }
+  // ---- typography
+  get lineHeight() {
+    return this.fmt.isSlide ? 1.5 : 1.6;
+  }
+  get linePx() {
+    return this.F * this.lineHeight;
+  }
+  get titleSizePx() {
+    return this.F * this.titleScale;
+  }
+  get headerBandPx() {
+    return this.fmt.isSlide ? this.titleSizePx * TITLE_BAND_FACTOR : 0;
+  }
+  get headerGapPx() {
+    return this.fmt.isSlide ? this.F : 0;
+  }
+  get footerSizePx() {
+    return Math.min(FOOTER_MAX_BODY_RATIO * this.F, FOOTER_MAX_MARGIN_RATIO * this.marginVPx);
+  }
+  get footerBandPx() {
+    return this.marginVPx;
+  }
+  get tableScale() {
+    return this.fmt.isSlide ? 0.85 : 0.9;
+  }
+  get codeScale() {
+    return this.columns === "two" ? 0.6 : 0.85;
+  }
+  // ---- content box
+  get contentWPx() {
+    return this.pageWPx - 2 * this.marginHPx;
+  }
+  get contentHPx() {
+    return this.pageHPx - this.marginVPx - this.footerBandPx - this.headerBandPx - this.headerGapPx;
+  }
+  get textColPx() {
+    return (this.contentWPx - this.gutterPx) * this.splitRatio;
+  }
+  get figureColPx() {
+    return (this.contentWPx - this.gutterPx) * (1 - this.splitRatio);
+  }
+  /** Width of one column in the two-column layout (left, then right). */
+  get col2Px() {
+    return (this.contentWPx - this.gutterPx) / 2;
+  }
+  /** [W, H, r] for figure sizing in the given page mode. */
+  figureBox(mode, ratioOverride) {
+    const usableH = this.contentHPx * SAFETY - 1;
+    if (mode === "split") return [this.figureColPx, usableH, IMAGE_RATIO_SPLIT];
+    if (mode === "col") return [this.col2Px, usableH, IMAGE_RATIO_SPLIT];
+    const r = ratioOverride === void 0 || ratioOverride === null ? IMAGE_RATIO_SINGLE : ratioOverride;
+    return [this.contentWPx, this.contentHPx, r];
+  }
+  /** These metrics with a page's own split ratio and gutter (layout overrides). */
+  withColumns(splitRatio, gutterPx) {
+    return new _Metrics(this.fmt, this.F, this.titleScale, this.columns, this.figureSide, splitRatio, gutterPx);
+  }
+  /** Whether the column widths differ from `other` (so text must be measured again). */
+  sameColumns(other) {
+    return this.splitRatio === other.splitRatio && this.gutterPx === other.gutterPx;
+  }
+  /** The column variables a page sets on its own <section> when they differ from the document's. */
+  columnVars() {
+    const textFr = pyRound(this.splitRatio * 2, 3);
+    const figureFr = pyRound((1 - this.splitRatio) * 2, 3);
+    return `--gutter: ${fixed(this.gutterPx, 3)}px; --text-fr: ${pyFloat(textFr)}fr; --figure-fr: ${pyFloat(figureFr)}fr;`;
+  }
+  cssVars() {
+    const f = this.fmt;
+    const textFr = pyRound(this.splitRatio * 2, 3);
+    const figureFr = pyRound((1 - this.splitRatio) * 2, 3);
+    const lines = [
+      `--page-w: ${pyFloat(f.widthMm)}mm;`,
+      `--page-h: ${pyFloat(f.heightMm)}mm;`,
+      `--margin-v: ${pyFloat(f.marginVMm)}mm;`,
+      `--margin-h: ${pyFloat(f.marginHMm)}mm;`,
+      `--font-size: ${fixed(this.F, 3)}px;`,
+      `--line-height: ${pyFloat(this.lineHeight)};`,
+      `--title-size: ${fixed(this.titleSizePx, 3)}px;`,
+      `--header-band: ${fixed(this.headerBandPx, 3)}px;`,
+      `--header-gap: ${fixed(this.headerGapPx, 3)}px;`,
+      `--footer-size: ${fixed(this.footerSizePx, 3)}px;`,
+      `--footer-band: ${fixed(this.footerBandPx, 3)}px;`,
+      `--content-w: ${fixed(this.contentWPx, 3)}px;`,
+      `--content-h: ${fixed(this.contentHPx, 3)}px;`,
+      `--gutter: ${fixed(this.gutterPx, 3)}px;`,
+      `--text-fr: ${pyFloat(textFr)}fr;`,
+      `--figure-fr: ${pyFloat(figureFr)}fr;`,
+      `--table-scale: ${pyFloat(this.tableScale)};`,
+      `--code-scale: ${pyFloat(this.codeScale)};`
+    ];
+    return ":root {\n  " + lines.join("\n  ") + "\n}\n";
+  }
+};
+function buildMetrics(fmt2, fontSize, titleScale, columns, figureSide, splitRatio, gutter = null) {
+  const F = fontSize ? parseFontSize(fontSize) : fmt2.defaultFontPt * PT_TO_PX;
+  const cols = columns ?? fmt2.defaultColumns;
+  if (cols !== "two" && cols !== "split" && cols !== "single") {
+    throw new RangeError(`invalid columns ${repr(cols)}: expected two, split or single`);
+  }
+  if (figureSide !== "left" && figureSide !== "right") {
+    throw new RangeError(`invalid figure side ${repr(figureSide)}: expected left or right`);
+  }
+  checkSplitRatio(splitRatio);
+  if (titleScale <= 0) throw new RangeError(`invalid title scale ${titleScale}`);
+  const m = new Metrics(fmt2, F, titleScale, cols, figureSide, splitRatio, 0);
+  return m.withColumns(splitRatio, checkedGutter(gutter ?? DEFAULT_GUTTER, F, m.contentWPx));
+}
+function checkSplitRatio(splitRatio) {
+  if (!(splitRatio >= 0.4 && splitRatio <= 0.6)) {
+    throw new RangeError(`invalid split ratio ${splitRatio}: expected 0.4 to 0.6`);
+  }
+}
+function checkedGutter(value, F, contentWPx) {
+  const px = parseGutter(value, F);
+  const max = contentWPx * MAX_GUTTER_RATIO;
+  if (px > max) {
+    throw new RangeError(
+      `invalid gutter ${repr(value)}: ${fixed(px, 1)}px is wider than ${MAX_GUTTER_RATIO * 100}% of the content width (${fixed(max, 1)}px of ${fixed(contentWPx, 1)}px)`
+    );
+  }
+  return px;
+}
+
 // src/render.ts
 var RenderError = class extends Error {
 };
@@ -1529,6 +1746,9 @@ function renderPage(page, ctx, pageNo, total, docTitle, dateText2) {
     return `<section class="page cover" data-page-id="${esc(pid)}" data-mode="cover"><div class="page-body">${body}</div>${footer}</section>`;
   }
   const mode = pageMode(page, ctx);
+  const pm = pageMetrics(page.id, ctx);
+  const own = pm !== ctx.metrics;
+  const pctx = own ? { ...ctx, metrics: pm } : ctx;
   let header = "";
   if (fmt2.isSlide) {
     const title = headerTitle(page, ctx, docTitle);
@@ -1537,23 +1757,34 @@ function renderPage(page, ctx, pageNo, total, docTitle, dateText2) {
   }
   let cols;
   if (mode === "two") {
-    cols = renderTwoColumns(page, ctx);
+    cols = renderTwoColumns(page, pctx);
   } else {
     const figure = mode !== "single" ? firstFigure(page) : null;
     const textBlocks = page.blocks.filter((b) => b !== figure);
     const figureMode = mode !== "single" ? "split" : "single";
-    const colText = textBlocks.map((b) => renderBlock(b, ctx, figureMode)).join("\n");
+    const colText = textBlocks.map((b) => renderBlock(b, pctx, figureMode)).join("\n");
     cols = `<div class="column-text">
 ${colText}
 </div>`;
     if (figure !== null) cols += `
-<div class="column-figure">${renderBlock(figure, ctx, "split")}</div>`;
+<div class="column-figure">${renderBlock(figure, pctx, "split")}</div>`;
   }
-  return `<section class="page" data-page-id="${esc(pid)}" data-mode="${mode}">${header}
+  const style = own ? ` style="${pm.columnVars()}"` : "";
+  return `<section class="page" data-page-id="${esc(pid)}" data-mode="${mode}"${style}>${header}
 <div class="page-body ${mode}">
 ${cols}
 </div>
 ${footer}</section>`;
+}
+function pageMetrics(pageId, ctx) {
+  return overrideMetrics(ctx.layout.pageOverride(pageId), ctx.metrics);
+}
+function overrideMetrics(ov, m) {
+  const ratio = ov.splitRatio ?? m.splitRatio;
+  const gutter = ov.gutter === void 0 ? m.gutterPx : checkedGutter(ov.gutter, m.F, m.contentWPx);
+  if (ratio === m.splitRatio && gutter === m.gutterPx) return m;
+  checkSplitRatio(ratio);
+  return m.withColumns(ratio, gutter);
 }
 function renderTwoColumns(page, ctx) {
   const blocks = page.blocks;
@@ -1639,6 +1870,7 @@ function effectiveLayout(layout) {
   const out = layoutToDict(layout);
   out.mermaidLib = MERMAID_LIB;
   out.mermaidVersion = mermaidVersion();
+  out.gutter = layout.gutter ?? DEFAULT_GUTTER;
   return out;
 }
 function needsFontAwesome(blocks) {
@@ -1664,13 +1896,18 @@ function renderDocument(doc, pages, ctx, dateText2) {
   out.push(...tailScripts(needsShiki), pageNumberScript(), "</body></html>");
   return out[0] + "\n" + out.slice(1).join("\n");
 }
-function renderMeasureDocument(blocks, ctx) {
+function textWidth(columns, m) {
+  if (columns === "two") return m.col2Px;
+  if (columns === "split") return m.textColPx;
+  return m.contentWPx;
+}
+function renderMeasureDocument(blocks, ctx, columns = ctx.metrics.columns) {
   const m = ctx.metrics;
   const [needsFa, needsShiki] = needs(blocks, null);
   const out = [head(ctx, "measure", needsFa, null, "ja"), "<body>"];
   const widths = [];
-  if (m.columns === "two") widths.push(["col", m.col2Px, "col"]);
-  else if (m.columns === "split") widths.push(["col", m.textColPx, "split"]);
+  if (columns === "two") widths.push(["col", m.col2Px, "col"]);
+  else if (columns === "split") widths.push(["col", m.textColPx, "split"]);
   widths.push(["single", m.contentWPx, "single"]);
   for (const [name, width, figMode] of widths) {
     out.push(`<div class="measure" data-measure="${name}" style="width:${fixed(width, 2)}px">`);
@@ -1823,154 +2060,6 @@ var Diagrams = class {
     this.renderer = null;
   }
 };
-
-// src/scale.ts
-var SIZE_RE = /^\s*([0-9]+(?:\.[0-9]+)?)\s*(pt|px|mm)\s*$/;
-var TITLE_BAND_FACTOR = 2;
-var FOOTER_MAX_BODY_RATIO = 0.75;
-var FOOTER_MAX_MARGIN_RATIO = 0.36;
-var SAFETY = 0.98;
-var IMAGE_RATIO_SINGLE = 0.6;
-var IMAGE_RATIO_SPLIT = 1;
-function parseFontSize(value) {
-  const m = SIZE_RE.exec(value);
-  if (!m) throw new RangeError(`invalid --font-size ${repr(value)}: expected e.g. 11pt, 14px, 3.5mm`);
-  const num = parseFloat(m[1]);
-  const unit = m[2];
-  if (num <= 0) throw new RangeError(`invalid --font-size ${repr(value)}: must be positive`);
-  if (unit === "pt") return num * PT_TO_PX;
-  if (unit === "mm") return num * MM_TO_PX;
-  return num;
-}
-var Metrics = class {
-  fmt;
-  F;
-  // body font px
-  titleScale;
-  columns;
-  // document default
-  figureSide;
-  splitRatio;
-  // text column fraction
-  constructor(fmt2, F, titleScale, columns, figureSide, splitRatio) {
-    this.fmt = fmt2;
-    this.F = F;
-    this.titleScale = titleScale;
-    this.columns = columns;
-    this.figureSide = figureSide;
-    this.splitRatio = splitRatio;
-  }
-  // ---- paper
-  get pageWPx() {
-    return this.fmt.widthMm * MM_TO_PX;
-  }
-  get pageHPx() {
-    return this.fmt.heightMm * MM_TO_PX;
-  }
-  get marginVPx() {
-    return this.fmt.marginVMm * MM_TO_PX;
-  }
-  get marginHPx() {
-    return this.fmt.marginHMm * MM_TO_PX;
-  }
-  // ---- typography
-  get lineHeight() {
-    return this.fmt.isSlide ? 1.5 : 1.6;
-  }
-  get linePx() {
-    return this.F * this.lineHeight;
-  }
-  get titleSizePx() {
-    return this.F * this.titleScale;
-  }
-  get headerBandPx() {
-    return this.fmt.isSlide ? this.titleSizePx * TITLE_BAND_FACTOR : 0;
-  }
-  get headerGapPx() {
-    return this.fmt.isSlide ? this.F : 0;
-  }
-  get footerSizePx() {
-    return Math.min(FOOTER_MAX_BODY_RATIO * this.F, FOOTER_MAX_MARGIN_RATIO * this.marginVPx);
-  }
-  get footerBandPx() {
-    return this.marginVPx;
-  }
-  get tableScale() {
-    return this.fmt.isSlide ? 0.85 : 0.9;
-  }
-  get codeScale() {
-    return this.columns === "two" ? 0.6 : 0.85;
-  }
-  // ---- content box
-  get contentWPx() {
-    return this.pageWPx - 2 * this.marginHPx;
-  }
-  get contentHPx() {
-    return this.pageHPx - this.marginVPx - this.footerBandPx - this.headerBandPx - this.headerGapPx;
-  }
-  get gutterPx() {
-    return this.F * 1.5;
-  }
-  get textColPx() {
-    return (this.contentWPx - this.gutterPx) * this.splitRatio;
-  }
-  get figureColPx() {
-    return (this.contentWPx - this.gutterPx) * (1 - this.splitRatio);
-  }
-  /** Width of one column in the two-column layout (left, then right). */
-  get col2Px() {
-    return (this.contentWPx - this.gutterPx) / 2;
-  }
-  /** [W, H, r] for figure sizing in the given page mode. */
-  figureBox(mode, ratioOverride) {
-    const usableH = this.contentHPx * SAFETY - 1;
-    if (mode === "split") return [this.figureColPx, usableH, IMAGE_RATIO_SPLIT];
-    if (mode === "col") return [this.col2Px, usableH, IMAGE_RATIO_SPLIT];
-    const r = ratioOverride === void 0 || ratioOverride === null ? IMAGE_RATIO_SINGLE : ratioOverride;
-    return [this.contentWPx, this.contentHPx, r];
-  }
-  cssVars() {
-    const f = this.fmt;
-    const textFr = pyRound(this.splitRatio * 2, 3);
-    const figureFr = pyRound((1 - this.splitRatio) * 2, 3);
-    const lines = [
-      `--page-w: ${pyFloat(f.widthMm)}mm;`,
-      `--page-h: ${pyFloat(f.heightMm)}mm;`,
-      `--margin-v: ${pyFloat(f.marginVMm)}mm;`,
-      `--margin-h: ${pyFloat(f.marginHMm)}mm;`,
-      `--font-size: ${fixed(this.F, 3)}px;`,
-      `--line-height: ${pyFloat(this.lineHeight)};`,
-      `--title-size: ${fixed(this.titleSizePx, 3)}px;`,
-      `--header-band: ${fixed(this.headerBandPx, 3)}px;`,
-      `--header-gap: ${fixed(this.headerGapPx, 3)}px;`,
-      `--footer-size: ${fixed(this.footerSizePx, 3)}px;`,
-      `--footer-band: ${fixed(this.footerBandPx, 3)}px;`,
-      `--content-w: ${fixed(this.contentWPx, 3)}px;`,
-      `--content-h: ${fixed(this.contentHPx, 3)}px;`,
-      `--gutter: ${fixed(this.gutterPx, 3)}px;`,
-      `--text-fr: ${pyFloat(textFr)}fr;`,
-      `--figure-fr: ${pyFloat(figureFr)}fr;`,
-      `--table-scale: ${pyFloat(this.tableScale)};`,
-      `--code-scale: ${pyFloat(this.codeScale)};`
-    ];
-    return ":root {\n  " + lines.join("\n  ") + "\n}\n";
-  }
-};
-function buildMetrics(fmt2, fontSize, titleScale, columns, figureSide, splitRatio) {
-  const F = fontSize ? parseFontSize(fontSize) : fmt2.defaultFontPt * PT_TO_PX;
-  const cols = columns ?? fmt2.defaultColumns;
-  if (cols !== "two" && cols !== "split" && cols !== "single") {
-    throw new RangeError(`invalid columns ${repr(cols)}: expected two, split or single`);
-  }
-  if (figureSide !== "left" && figureSide !== "right") {
-    throw new RangeError(`invalid figure side ${repr(figureSide)}: expected left or right`);
-  }
-  if (!(splitRatio >= 0.4 && splitRatio <= 0.6)) {
-    throw new RangeError(`invalid split ratio ${splitRatio}: expected 0.4 to 0.6`);
-  }
-  if (titleScale <= 0) throw new RangeError(`invalid title scale ${titleScale}`);
-  return new Metrics(fmt2, F, titleScale, cols, figureSide, splitRatio);
-}
 
 // src/paginate.ts
 var MIN_TABLE_HEAD_ROWS = 3;
@@ -2342,7 +2431,7 @@ function splitParagraph(b, h, remaining) {
   });
   return [head2, headH, tail, tailH];
 }
-function spillPages(pages, makeCtx, layoutColumnsForPage, existingIds) {
+function spillPages(pages, ctxForPage, existingIds) {
   const existing = new Set(existingIds ?? []);
   for (const p of pages) existing.add(p.id);
   const out = [];
@@ -2352,7 +2441,7 @@ function spillPages(pages, makeCtx, layoutColumnsForPage, existingIds) {
       out.push(page);
       continue;
     }
-    const ctx = makeCtx(layoutColumnsForPage(page));
+    const ctx = ctxForPage(page);
     const result = paginate(page.blocks, ctx, page.title, page.continued);
     if (!result.length) {
       out.push(page);
@@ -2694,13 +2783,16 @@ function balanceRegion(reg, ctx) {
   reg.rightAcc = racc;
   reg.leftFull = true;
 }
-function flattenForReflow(pages) {
+function flattenWithSettings(pages, settingsOf) {
   const blocks = [];
+  const settings = [];
   let prevKind = null;
   for (const page of pages) {
     if (page.kind === "source") continue;
+    const s = settingsOf(page);
     if (page.kind === "content" && page.title && !page.continued && prevKind !== "cover") {
       blocks.push({ type: "heading", level: 2, text: page.title });
+      settings.push(s);
     }
     prevKind = page.kind;
     for (const b of page.blocks) {
@@ -2718,9 +2810,10 @@ function flattenForReflow(pages) {
       const nb = { ...b };
       delete nb.continued;
       blocks.push(nb);
+      settings.push(s);
     }
   }
-  return blocks;
+  return { blocks, settings };
 }
 
 // src/pptx.ts
@@ -2959,6 +3052,90 @@ async function exportPptx(browser, htmlPath, pptxPath, widthMm, heightMm, opts) 
   return assemblePptx(await capturePages(browser, htmlPath, opts), widthMm, heightMm, pptxPath, opts);
 }
 
+// src/sections.ts
+var KEYS = {
+  columns: "columns",
+  "split-ratio": "splitRatio",
+  gutter: "gutter",
+  "figure-side": "figureSide"
+};
+function parseLayoutComment(body, where) {
+  const settings = {};
+  const words2 = strip(body).split(/\s+/).filter(Boolean);
+  if (!words2.length) throw new LayoutError(`${where}: the layout comment sets nothing (expected e.g. columns=single)`);
+  for (const word of words2) {
+    const m = /^([a-z-]+)=(\S+)$/.exec(word);
+    if (!m) throw new LayoutError(`${where}: ${repr(word)} in the layout comment is not key=value`);
+    const key = KEYS[m[1]];
+    if (key === void 0) {
+      throw new LayoutError(`${where}: unknown key ${repr(m[1])} in the layout comment (expected ${Object.keys(KEYS).join(", ")})`);
+    }
+    if (key in settings) throw new LayoutError(`${where}: ${repr(m[1])} is set twice in the layout comment`);
+    settings[key] = key === "splitRatio" ? Number(m[2]) : m[2];
+  }
+  validateOverrides({ [where]: settings }, "the Markdown");
+  return settings;
+}
+function sectionSettings(blocks) {
+  const out = [];
+  const settings = [];
+  const open = [];
+  let lastWasMarker = false;
+  for (const b of blocks) {
+    if (b.type === "layout") {
+      const prev = out[out.length - 1];
+      if (!prev || prev.type !== "heading" || lastWasMarker) {
+        const after = lastWasMarker ? "another layout comment" : prev ? `a ${prev.type} block` : "the start of the document";
+        throw new LayoutError(`a layout comment must come right after a heading, one per heading (found after ${after})`);
+      }
+      const s = parseLayoutComment(b.settings, `heading ${repr(prev.text)}`);
+      open.push({ level: prev.level, settings: s });
+      settings[settings.length - 1] = s;
+      lastWasMarker = true;
+      continue;
+    }
+    lastWasMarker = false;
+    if (b.type === "heading") {
+      while (open.length && open[open.length - 1].level >= b.level) open.pop();
+    }
+    if ((b.type === "paragraph" || b.type === "quote") && /<!--\s*layout:/.test(b.text)) {
+      throw new LayoutError(
+        `a layout comment inside a paragraph is ignored by Markdown; put it on its own line right after a heading: ${repr(b.text.slice(0, 60))}`
+      );
+    }
+    out.push(b);
+    settings.push(open.length ? open[open.length - 1].settings : null);
+  }
+  return { blocks: out, settings };
+}
+function settingsKey(s) {
+  if (s === null) return "";
+  return JSON.stringify(Object.keys(s).sort().map((k) => [k, s[k]]));
+}
+function runs(blocks, settings) {
+  const out = [];
+  blocks.forEach((b, i) => {
+    const s = settings[i] ?? null;
+    const last = out[out.length - 1];
+    if (last && settingsKey(last.settings) === settingsKey(s)) last.blocks.push(b);
+    else out.push({ blocks: [b], settings: s });
+  });
+  return out;
+}
+var PAGE_ID_RE = /^p\d+(?:-\d+)*$/;
+function remapPageOverrides(overrides, pageIds) {
+  const out = {};
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!PAGE_ID_RE.test(key)) out[key] = value;
+  }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!PAGE_ID_RE.test(key)) continue;
+    const to = pageIds.get(key);
+    if (to !== void 0) out[to] = { ...out[to] ?? {}, ...value };
+  }
+  return out;
+}
+
 // src/report.ts
 import { writeFileSync as writeFileSync4 } from "node:fs";
 function buildReport(metrics, columns, verify, spills, warnings, notes) {
@@ -3057,6 +3234,11 @@ var LAYOUT_OPTS = {
   columns: { type: "string", choices: ["two", "split", "single"], help: "two = two columns, left then right (default on landscape paper), split = one figure beside the text, single" },
   "figure-side": { type: "string", choices: ["left", "right"], help: "side of the figure column in split pages" },
   "split-ratio": { type: "string", help: "text column fraction in split pages (0.4 to 0.6)", metavar: "FLOAT" },
+  gutter: {
+    type: "string",
+    metavar: "LENGTH",
+    help: "gap between columns (split and two): em (x body font size), px, mm or pt (default 2em)"
+  },
   details: { type: "string", choices: ["drop", "expand"], help: "what to do with <details> blocks" },
   "mermaid-lib": {
     type: "string",
@@ -3231,6 +3413,7 @@ function layoutFromArgs(args, base = null) {
     columns: str(args, "columns"),
     figureSide: str(args, "figure-side"),
     splitRatio: floatArg(args, "split-ratio"),
+    gutter: str(args, "gutter"),
     details: str(args, "details"),
     mermaidLib: str(args, "mermaid-lib"),
     mermaidVersion: str(args, "mermaid-version"),
@@ -3243,7 +3426,15 @@ function layoutFromArgs(args, base = null) {
   return buildLayout(str(args, "layout") ?? null, cli, base, mermaidVersion());
 }
 function metricsFromLayout(layout) {
-  return buildMetrics(getFormat(layout.page), layout.fontSize, layout.titleScale, layout.columns, layout.figureSide, layout.splitRatio);
+  return buildMetrics(
+    getFormat(layout.page),
+    layout.fontSize,
+    layout.titleScale,
+    layout.columns,
+    layout.figureSide,
+    layout.splitRatio,
+    layout.gutter
+  );
 }
 function today() {
   const d = /* @__PURE__ */ new Date();
@@ -3279,9 +3470,9 @@ async function withSession(s, fn) {
     await closeSession(s);
   }
 }
-function renderContext(s, htmlDir, svgs) {
+function renderContext(s, htmlDir, svgs, metrics = s.metrics) {
   return {
-    metrics: s.metrics,
+    metrics,
     layout: s.layout,
     imageBase: s.imageBase,
     htmlDir,
@@ -3297,9 +3488,9 @@ function tempHtml(dir, prefix) {
 function writeTemp(path, text) {
   writeFileSync5(path, text, { encoding: "utf-8", flag: "wx" });
 }
-async function measureHeights(s, blocks, workDir) {
-  const ctx = renderContext(s, null, await s.diagrams.svgsFor(blocks));
-  const htmlText = renderMeasureDocument(blocks, ctx);
+async function measureHeights(s, blocks, workDir, metrics = s.metrics, columns = metrics.columns) {
+  const ctx = renderContext(s, null, await s.diagrams.svgsFor(blocks), metrics);
+  const htmlText = renderMeasureDocument(blocks, ctx, columns);
   const path = tempHtml(workDir, "measure");
   let raw;
   try {
@@ -3333,6 +3524,41 @@ function makePaginateCtx(metrics, columns, heightsCol, heightsSingle, docTitle, 
     colBox: [colW, colH * colR],
     bandBox: [bandW, bandH * bandR]
   };
+}
+async function paginateRuns(s, blocks, settings, docTitle, workDir, verbose) {
+  const warnings = [];
+  const [heightsCol, heightsSingle] = await measureHeights(s, blocks, workDir);
+  if (verbose) printVerboseHeights(heightsCol);
+  const docKey = `${s.metrics.columns}:${fixed(textWidth(s.metrics.columns, s.metrics), 3)}`;
+  const tables = /* @__PURE__ */ new Map([[docKey, heightsCol]]);
+  const plan = runs(blocks, settings).map((run) => {
+    const metrics = run.settings ? overrideMetrics(run.settings, s.metrics) : s.metrics;
+    const columns = run.settings?.columns ?? s.metrics.columns;
+    return { ...run, metrics, columns, key: `${columns}:${fixed(textWidth(columns, metrics), 3)}` };
+  });
+  for (const run of plan) {
+    if (run.columns === "single" || tables.has(run.key)) continue;
+    const same = plan.filter((r) => r.key === run.key).flatMap((r) => r.blocks);
+    const [col] = await measureHeights(s, same, workDir, run.metrics, run.columns);
+    tables.set(run.key, col);
+  }
+  const pages = [];
+  const pageSettings = [];
+  for (const run of plan) {
+    const col = run.columns === "single" ? heightsSingle : tables.get(run.key);
+    const ctx = makePaginateCtx(run.metrics, run.columns, col, heightsSingle, docTitle, s.layout);
+    ctx.warnings = warnings;
+    const last = pages[pages.length - 1];
+    const out = paginate(run.blocks, ctx, last ? last.title : null, last ? last.title !== null : false).map((p) => p.toJson());
+    pages.push(...out);
+    pageSettings.push(...out.map(() => run.settings));
+  }
+  assignPageIds(pages);
+  pages.forEach((p, i) => {
+    const ps = pageSettings[i];
+    if (ps) s.layout.overrides[p.id] = { ...ps, ...s.layout.overrides[p.id] ?? {} };
+  });
+  return { pages, warnings };
 }
 function assignPageIds(pages, start = 1) {
   pages.forEach((p, i) => p.id = `p${String(i + start).padStart(2, "0")}`);
@@ -3372,11 +3598,11 @@ async function verifyAndFix(s, doc, pagesIn, htmlDir, date, workDir, verbose, re
         `verification did not converge after ${MAX_VERIFY_ROUNDS} rounds; overflowing pages: ${overflowing.map((v) => v.id).join(", ")}`
       );
     }
-    pages = pushLastBlocks(pages, new Map(overflowing.map((v) => [v.id, v])));
+    pages = pushLastBlocks(pages, new Map(overflowing.map((v) => [v.id, v])), s.layout);
     if (relayout !== null) pages = relayout(pages);
   }
 }
-function pushLastBlocks(pages, overflowing) {
+function pushLastBlocks(pages, overflowing, layout) {
   const out = [];
   const existing = new Set(pages.map((p) => p.id));
   for (const page of pages) {
@@ -3410,6 +3636,7 @@ function pushLastBlocks(pages, overflowing) {
     while (existing.has(`${page.id}-${n}`)) n += 1;
     const newId = `${page.id}-${n}`;
     existing.add(newId);
+    inheritPageOverride(layout, page.id, newId);
     const shrunk = { ...page, blocks: keep };
     delete shrunk._layout;
     out.push(shrunk);
@@ -3525,7 +3752,7 @@ async function cmdImport(args) {
   const original = readFileSync6(src, "utf-8");
   const notes = new ImportNotes();
   const text = preprocessMarkdown(original, layout.details, notes);
-  const blockList = parseBlocks(text, layout.hrBreak, notes);
+  const { blocks: blockList, settings: blockSettings } = sectionSettings(parseBlocks(text, layout.hrBreak, notes));
   if (!blockList.length) throw new CliError("no content blocks found in the Markdown");
   blockList.forEach((b, i) => b.id = `b${i}`);
   const stem = basename3(src, extname3(src));
@@ -3542,11 +3769,7 @@ async function cmdImport(args) {
   const css = await fontCss(doc, layout, blockList);
   const session = await openSession(args, layout, metrics, imageBase, css, blockList);
   const { finalPages, verify, rounds, warnings, htmlText, oldIds } = await withSession(session, async (s) => {
-    const [heightsCol, heightsSingle] = await measureHeights(s, blockList, workDir);
-    if (verbose) printVerboseHeights(heightsCol);
-    const pctx = makePaginateCtx(metrics, metrics.columns, heightsCol, heightsSingle, title, layout);
-    const firstPass = paginate(blockList, pctx).map((p) => p.toJson());
-    assignPageIds(firstPass);
+    const { pages: firstPass } = await paginateRuns(s, blockList, blockSettings, title, workDir, verbose);
     dropRuntimeKeys(firstPass);
     doc.pages.push(...firstPass);
     validateContent(doc, outPath);
@@ -3554,7 +3777,9 @@ async function cmdImport(args) {
     const [pages, , warnings2, relayout] = await buildPages(s, doc, workDir, verbose);
     const [, verify2, rounds2, finalPages2, codeHtml] = await verifyAndFix(s, doc, pages, workDir, date, workDir, verbose, relayout);
     const oldIds2 = finalPages2.map((p) => p.blocks.map((b) => b.id));
+    const oldPageIds = finalPages2.map((p) => p.id);
     assignPageIds(finalPages2);
+    layout.overrides = remapPageOverrides(layout.overrides, new Map(oldPageIds.map((id, i) => [id, finalPages2[i].id])));
     let htmlText2 = null;
     if (toHtml) {
       const ctx = renderContext(s, workDir, await s.diagrams.svgsFor(finalPages2.flatMap((p) => p.blocks)));
@@ -3612,15 +3837,49 @@ async function buildPages(s, doc, workDir, verbose) {
     if (mode === "two") return "two";
     return mode === "single" ? "single" : "split";
   };
-  const makeCtx = (columns) => {
-    const ctx = makePaginateCtx(s.metrics, columns, heightsCol, heightsSingle, doc.meta.title, s.layout);
+  const widthKey = (columns, m) => `${columns}:${fixed(textWidth(columns, m), 3)}`;
+  const tables = /* @__PURE__ */ new Map([[widthKey(s.metrics.columns, s.metrics), heightsCol]]);
+  const colTable = (page) => {
+    const columns = columnsForPage(page);
+    if (columns === "single") return heightsSingle;
+    const table = tables.get(widthKey(columns, pageMetrics(page.id, probe)));
+    if (table === void 0) throw new CliError(`internal: no heights measured for the columns of page ${page.id}`);
+    return table;
+  };
+  const groups = /* @__PURE__ */ new Map();
+  for (const page of pages) {
+    const columns = columnsForPage(page);
+    if (page.kind !== "content" || columns === "single") continue;
+    const pm = pageMetrics(page.id, probe);
+    const key = widthKey(columns, pm);
+    if (tables.has(key)) continue;
+    const g = groups.get(key) ?? { columns, metrics: pm, blocks: [] };
+    g.blocks.push(...page.blocks);
+    groups.set(key, g);
+  }
+  for (const [key, g] of groups) {
+    const [col] = await measureHeights(s, g.blocks, workDir, g.metrics, g.columns);
+    tables.set(key, col);
+  }
+  const ctxForPage = (page) => {
+    const ctx = makePaginateCtx(pageMetrics(page.id, probe), columnsForPage(page), colTable(page), heightsSingle, doc.meta.title, s.layout);
     ctx.warnings = warnings;
     return ctx;
   };
-  const [newPages, spills] = spillPages(pages, makeCtx, columnsForPage);
-  const needsRelayout = (p) => p.kind === "content" && !("_layout" in p) && columnsForPage(p) === "two" && p.blocks.every((b) => b.id in heightsCol);
-  const relayout = (current) => relayoutPages(current, needsRelayout, (pgs, existing) => spillPages(pgs, makeCtx, columnsForPage, existing));
+  const spill = (pgs, existing) => {
+    const [out, sp] = spillPages(pgs, ctxForPage, existing);
+    for (const x2 of sp) inheritPageOverride(s.layout, x2.source, x2.target);
+    return [out, sp];
+  };
+  const [newPages, spills] = spill(pages);
+  const needsRelayout = (p) => p.kind === "content" && !("_layout" in p) && columnsForPage(p) === "two" && p.blocks.every((b) => b.id in colTable(p));
+  const relayout = (current) => relayoutPages(current, needsRelayout, spill);
   return [newPages, spills, warnings, relayout];
+}
+function inheritPageOverride(layout, from, to) {
+  const ov = layout.pageOverride(from);
+  if (!Object.keys(ov).length) return;
+  layout.overrides[to] = { ...ov, ...layout.overrides[to] ?? {} };
 }
 function spillEntries(spills) {
   return spills.map((sp) => ({ from: sp.source, to: sp.target, blocks: sp.blocks }));
@@ -3707,16 +3966,15 @@ async function cmdBuild(args) {
   return EXIT_OK;
 }
 async function reflowDoc(args, doc, layout, metrics, imageBase, workDir) {
-  const flat = flattenForReflow(doc.pages);
+  const { blocks: flat, settings } = flattenWithSettings(doc.pages, (page) => {
+    const ov = layout.pageOverride(page.id);
+    return Object.keys(ov).length ? ov : null;
+  });
+  for (const key of Object.keys(layout.overrides)) if (PAGE_ID_RE.test(key)) delete layout.overrides[key];
   flat.forEach((b, i) => b.id = `b${i}`);
   const css = await fontCss(doc, layout, flat);
   const session = await openSession(args, layout, metrics, imageBase, css, flat);
-  const [pages, warnings] = await withSession(session, async (s) => {
-    const [heightsCol, heightsSingle] = await measureHeights(s, flat, workDir);
-    const pctx = makePaginateCtx(metrics, metrics.columns, heightsCol, heightsSingle, doc.meta.title, layout);
-    return [paginate(flat, pctx).map((p) => p.toJson()), pctx.warnings];
-  });
-  assignPageIds(pages);
+  const { pages, warnings } = await withSession(session, (s) => paginateRuns(s, flat, settings, doc.meta.title, workDir, false));
   for (const p of pages) for (const b of p.blocks) delete b.id;
   const head2 = doc.pages[0].kind === "source" ? [doc.pages[0]] : [];
   doc.pages = [...head2, ...pages];

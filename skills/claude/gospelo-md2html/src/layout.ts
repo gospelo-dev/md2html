@@ -20,6 +20,7 @@ const LAYOUT_KEYS: Record<string, Kind> = {
   columns: 'string',
   figureSide: 'string',
   splitRatio: 'number',
+  gutter: 'string?',
   details: 'string',
   mermaidLib: 'string',
   mermaidVersion: 'string?',
@@ -31,7 +32,7 @@ const LAYOUT_KEYS: Record<string, Kind> = {
   overrides: 'object',
 }
 
-export const PAGE_OVERRIDE_KEYS = new Set(['columns', 'figureSide', 'splitRatio'])
+export const PAGE_OVERRIDE_KEYS = new Set(['columns', 'figureSide', 'splitRatio', 'gutter'])
 export const BLOCK_OVERRIDE_KEYS = new Set(['maxHeightRatio', 'span']) // span: 1 | 2 (two-column layout)
 
 /** The only way diagrams are written: as SVG drawn by mermaid-arch. */
@@ -48,6 +49,7 @@ export interface LayoutValues {
   columns: string | null
   figureSide: string
   splitRatio: number
+  gutter: string | null // gap between columns: em (x body size), px, mm, pt; null = DEFAULT_GUTTER, written as the effective one
   details: string
   mermaidLib: string // always "prerender"; kept so documents say how their diagrams were written
   mermaidVersion: string | null // null = the Mermaid that mermaid-arch vendors; written as the effective one
@@ -70,6 +72,7 @@ export class Layout implements LayoutValues {
   columns: string | null = null
   figureSide = 'right'
   splitRatio = 0.5
+  gutter: string | null = null
   details = 'drop'
   mermaidLib = MERMAID_LIB
   mermaidVersion: string | null = null
@@ -132,7 +135,7 @@ export function loadLayoutFile(path: string): Record<string, unknown> {
   return data
 }
 
-function validateOverrides(overrides: Record<string, unknown>, path: string): void {
+export function validateOverrides(overrides: Record<string, unknown>, path: string): void {
   for (const [target, values] of Object.entries(overrides)) {
     if (!isObject(values)) throw new LayoutError(`overrides[${repr(target)}] must be an object in ${path}`)
     for (const k of Object.keys(values)) {
@@ -146,8 +149,23 @@ function validateOverrides(overrides: Record<string, unknown>, path: string): vo
     if ('columns' in values && !['two', 'split', 'single'].includes(values.columns as string)) {
       throw new LayoutError(`override columns for ${repr(target)} must be two, split or single in ${path}`)
     }
+    if ('figureSide' in values && values.figureSide !== 'left' && values.figureSide !== 'right') {
+      throw new LayoutError(`override figureSide for ${repr(target)} must be left or right in ${path}`)
+    }
+    if ('splitRatio' in values) {
+      const r = values.splitRatio
+      if (typeof r !== 'number' || !(r >= 0.4 && r <= 0.6)) {
+        throw new LayoutError(`override splitRatio for ${repr(target)} must be a number from 0.4 to 0.6 in ${path}`)
+      }
+    }
+    if ('gutter' in values && (typeof values.gutter !== 'string' || !GUTTER_SYNTAX.test(values.gutter))) {
+      throw new LayoutError(`override gutter for ${repr(target)} must be a length such as 2em, 40px, 10mm or 30pt in ${path}`)
+    }
   }
 }
+
+/** The form of a gutter value; its size is checked against the page in scale.ts. */
+const GUTTER_SYNTAX = /^\s*[0-9]+(?:\.[0-9]+)?\s*(?:em|px|mm|pt)\s*$/
 
 /** Merge, lowest priority first: `base` (layout embedded in an input document),
  * the layout file, then CLI values. CLI values that are undefined/null are ignored. */
@@ -195,6 +213,10 @@ function check(layout: Layout, mermaidVersion: string): void {
   if (!['drop', 'expand'].includes(layout.details)) {
     throw new LayoutError(`invalid details mode ${repr(layout.details)}`)
   }
+  if (layout.gutter !== null && !GUTTER_SYNTAX.test(layout.gutter)) {
+    throw new LayoutError(`invalid gutter ${repr(layout.gutter)}: expected a length such as 2em, 40px, 10mm or 30pt`)
+  }
+  validateOverrides(layout.overrides, 'the layout')
   for (const [name, value] of [['fontFamily', layout.fontFamily], ['codeFontFamily', layout.codeFontFamily]] as const) {
     if (value !== null && (!value.trim() || /[<>{};]/.test(value))) {
       throw new LayoutError(

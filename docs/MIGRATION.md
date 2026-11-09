@@ -66,3 +66,9 @@ Other differences:
 - A link inside a paragraph that was split across pages now keeps its URL; the Python releases wrote `[text]()` for it. Rebuilding a document whose envelope already contains such an empty link does not restore the URL; fix the text in the envelope, or re-import from the Markdown.
 - `fa:` icons in diagram labels now embed Font Awesome Free with all its styles (about 0.5 MB instead of about 0.2 MB).
 - The `generator` written into the envelope is `gospelo-md2html 0.7.0`.
+
+## From 0.7 to 0.8
+
+- The default gap between columns (`two` and `split`) is now 2em (twice the body size); it was 1.5em. Columns get a little narrower, so text can take more lines and pages can break differently.
+- Documents written by 0.8 record the gap they used (`layout.gutter`). Documents written by 0.7 record none: `build` lays them out with the new 2em. To keep their earlier layout, rebuild once with `--gutter 1.5em`; the value is then recorded.
+- New: `--gutter`, per-page `splitRatio` and `gutter` overrides (a page-level `splitRatio` used to be accepted but not applied), and the `<!-- layout: ... -->` comment after a heading in the Markdown. Continuation pages of a page keep its page overrides, and `build --reflow` keeps a page's overrides on its content.

@@ -15,6 +15,9 @@ const SUMMARY_RE = /<summary>([\s\S]*?)<\/summary>/i
 const MERMAID_FENCE_RE = /^```mermaid[^\n]*\n([\s\S]*?)\n```\s*$/
 const DIAGRAM_IMG_RE = /(?:^|\n)!\[[^\]]*\]\(([^)]+)\)[ \t]*\n\s*$/
 const PAGEBREAK = '<!-- pagebreak -->'
+/** `<!-- layout: columns=single split-ratio=0.4 gutter=2em figure-side=left -->` right after a
+ * heading: the page layout of that heading's section (sections.ts). */
+export const LAYOUT_COMMENT_RE = /^<!--\s*layout:([\s\S]*?)-->$/
 
 export class ImportNotes {
   droppedDetails: string[] = []
@@ -135,8 +138,12 @@ function fold(tokens: Token[], hrBreak: boolean, notes: ImportNotes): Block[] {
       i = j + 1
     } else if (t === 'html_block') {
       const content = strip(tok.content)
+      const lm = LAYOUT_COMMENT_RE.exec(content)
       if (content === PAGEBREAK) {
         blocks.push({ type: 'pagebreak' })
+      } else if (lm) {
+        // a marker for sections.ts, which turns it into page layout and removes it
+        blocks.push({ type: 'layout', settings: strip(lm[1]!) })
       } else {
         notes.htmlBlocks += 1
         blocks.push({ type: 'html', html: content })

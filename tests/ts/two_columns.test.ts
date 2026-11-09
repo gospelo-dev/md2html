@@ -176,7 +176,7 @@ test('spill page keeps layout and unique continuation ids', () => {
     blocks: [0, 1, 2].map((i) => ({ type: 'paragraph', text: 'abc'[i]!, id: `p05-b${i}` })),
   }
   const heights = Object.fromEntries([0, 1, 2].map((i) => [`p05-b${i}`, bh(300, 0, 10)]))
-  const [newPages, spills] = spillPages([page], () => ctx(heights, 400), () => 'two', new Set(['p05-2']))
+  const [newPages, spills] = spillPages([page], () => ctx(heights, 400), new Set(['p05-2']))
   assert.deepEqual(newPages.map((p) => p.id), ['p05', 'p05-3'])
   const seg = newPages[0]!._layout![0] as { left: number[]; right: number[] }
   assert.deepEqual(seg.left, [0])

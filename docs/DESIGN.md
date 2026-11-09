@@ -18,7 +18,7 @@ flowchart LR
     end
     subgraph Space["spacing"]
         P["below a paragraph 0.7F, above h2 1.8F"]
-        G["column gap 1.5F"]
+        G["column gap 2F (--gutter)"]
         B["header band = 1.25F x 2"]
     end
     subgraph Fix["fixed per paper size"]
@@ -102,7 +102,7 @@ Paper sizes follow ISO 216 [S1] and PowerPoint's Widescreen / 4:3 [V1]; millimet
 
 ## 4. Columns: line length decides
 
-**Landscape paper defaults to two columns.** A single column would be 63 full-width characters per line, far beyond the 40-character maximum for horizontal Japanese [S2] [W6] [W7]. Two columns give 31, close to the 20 to 29 characters at which Japanese reading speed peaks [R2]. The gap is 1.5F, the same as the line height: the smallest distance that keeps the eye from jumping to the neighbouring column (between the JIS default of 2F [S2] and the CSS default of 1em [W5]).
+**Landscape paper defaults to two columns.** A single column would be 63 full-width characters per line, far beyond the 40-character maximum for horizontal Japanese [S2] [W6] [W7]. Two columns give 30, close to the 20 to 29 characters at which Japanese reading speed peaks [R2]. The gap is 2F by default, the JIS default [S2]. Until 0.7 it was 1.5F, the same as the line height and the smallest distance that keeps the eye from jumping to the neighbouring column (the CSS default is 1em [W5]); on slides with a figure beside the text that read as cramped, so the default moved to the JIS value. `--gutter` (or a page's `gutter` override) sets another gap.
 
 <img src="../assets/design/two-columns.en.png" alt="A 16:9 page in two columns: blocks 1 to 7 flow down the left column then the right in column order, a full-width band 8 interrupts, and columns 9 and 10 resume below it" width="1240">
 
@@ -112,10 +112,10 @@ Reading order is column order (left column, then right): down the left column, t
 
 | Paper | Column width | Gap | Characters per line |
 | --- | --- | --- | --- |
-| 16:9 (14pt) | 580px | 28px | 31 |
-| 4:3 (14pt) | 420px | 28px | 22 |
-| A4 landscape (11pt) | 474px | 22px | 32 |
-| A3 landscape (12pt) | 691px | 24px | 43 |
+| 16:9 (14pt) | 576px | 37px | 30 |
+| 4:3 (14pt) | 416px | 37px | 22 |
+| A4 landscape (11pt) | 471px | 29px | 32 |
+| A3 landscape (12pt) | 687px | 32px | 42 |
 
 ## 5. Where a figure goes: the scale decides
 

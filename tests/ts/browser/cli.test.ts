@@ -1,6 +1,8 @@
 // End to end through the bundled CLI (scripts/md2html.mjs): import, build, restore,
 // diagrams drawn by mermaid-arch in md2html's browser. Needs chrome-headless-shell
-// (md2html setup installs it).
+// (md2html setup installs it), so these tests run locally (npm test), not in CI:
+// on the Ubuntu runner Chrome's sandbox needs a kernel restriction lifted, which
+// the workflow does not do.
 //
 // The AWS icon test runs only when MD2HTML_TEST_ICONS_ZIP names an AWS icon package
 // zip: the icons are not part of the repository.
@@ -9,7 +11,7 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { CLI, tmp } from './helpers.ts'
+import { CLI, tmp } from '../helpers.ts'
 
 function md2html(...args: string[]): { code: number; out: string } {
   const r = spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf-8' })
@@ -93,7 +95,7 @@ test('a document paginated with Mermaid 11 is stopped, and the suggested option 
 test('the ELK fixture draws every way of asking for ELK, and an unknown layout stops', () => {
   const dir = tmp()
   const html = join(dir, 'elk.gospelo.html')
-  let r = md2html('import', join(import.meta.dirname, '..', 'fixtures', 'elk_flowchart.md'), '-o', html)
+  let r = md2html('import', join(import.meta.dirname, '..', '..', 'fixtures', 'elk_flowchart.md'), '-o', html)
   assert.equal(r.code, 0, r.out)
   const text = readFileSync(html, 'utf-8')
   for (let n = 1; n <= 5; n++) assert.ok(text.includes(`<svg id="md2html-mermaid-${n}"`), `diagram ${n}`)

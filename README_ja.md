@@ -252,26 +252,29 @@ md2html/
 │   └── opencode/README.md               # OpenCode から同じスキルを使う方法
 ├── tests/
 │   ├── ts/                              # node --test: ページ割りと 2 段組、インライン分割、エンベロープ入出力、
-│   │                                    # mermaid-arch による図、PPTX 出力、フォント、CLI の通し
+│   │   │                                # layout の名前、PPTX 出力、フォント
+│   │   └── browser/                     # chrome-headless-shell で CLI を通すテスト (手元で実行。CI では実行しない)
 │   ├── kumihan/、test_extract_markdown.py  # pytest: Python で残る部分
 │   └── fixtures/
-├── .github/workflows/ci.yml             # CI: node のテスト (md2html.mjs が src/ と一致するかの確認を含む)、pytest、md2html.py 経由のスモークテスト
+├── .github/workflows/ci.yml             # CI: ブラウザを使わない node のテスト (md2html.mjs が src/ と一致するかの確認を含む)、pytest
 ├── docs/                                # QUICKSTART、DESIGN、ARCHITECTURE、MIGRATION (英日)、spec/gospelo-document
 ├── assets/                              # README のヒーロー画像。design/ に DESIGN の図とそれを描くスクリプト
 ├── THIRD_PARTY_NOTICES.md               # 同梱資産と実行時依存のライセンス
 └── LICENSE
 ```
 
-テストは CI と同じく次のコマンドで実行します。
+テストは次のコマンドで実行します。
 
 ```bash
-# TypeScript (.ts のテストをそのまま実行するため Node 22.18 以上)
-cd skills/claude/gospelo-md2html && npm ci && npm test && cd -
+# TypeScript (.ts のテストをそのまま実行するため Node 22.18 以上)。npm test は、CI では実行しない
+# tests/ts/browser も含めて全部実行する。GitHub の Ubuntu の実行環境では、カーネルの制限を外さないと
+# Chrome がサンドボックスを作れず、ワークフローではその制限を外さないため
+cd skills/claude/gospelo-md2html && npm ci && node scripts/md2html.mjs setup && npm test && cd -
 # MD2HTML_TEST_ICONS_ZIP に AWS のアイコン zip を指定すると、aws: アイコンのテストも実行する
 
-# Python (kumihan と extract_markdown.py)
-uv run --python 3.13.1 \
-  --with pytest \
+# Python (kumihan と extract_markdown.py)。CI と同じ
+uv run --python 3.14.9 \
+  --with pytest --with brotli \
   --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py \
   pytest -q tests/kumihan tests/test_extract_markdown.py
 ```

@@ -253,26 +253,29 @@ md2html/
 │   └── opencode/README.md               # How OpenCode picks up the same skill
 ├── tests/
 │   ├── ts/                              # node --test: pagination and two columns, inline split, envelope I/O,
-│   │                                    # diagrams via mermaid-arch, PPTX export, fonts, the CLI end to end
+│   │   │                                # layout names, PPTX export, fonts
+│   │   └── browser/                     # the CLI end to end in chrome-headless-shell (run locally, not in CI)
 │   ├── kumihan/, test_extract_markdown.py  # pytest: the Python parts that remain
 │   └── fixtures/
-├── .github/workflows/ci.yml             # CI: node tests (and a check that md2html.mjs matches src/), pytest, a smoke test through md2html.py
+├── .github/workflows/ci.yml             # CI: the node tests without a browser (and a check that md2html.mjs matches src/), pytest
 ├── docs/                                # QUICKSTART, DESIGN, ARCHITECTURE, MIGRATION (en/ja), spec/gospelo-document
 ├── assets/                              # README hero image; design/ holds the DESIGN figures and the script that draws them
 ├── THIRD_PARTY_NOTICES.md               # Licenses of the vendored assets and runtime dependencies
 └── LICENSE
 ```
 
-Run the tests the way CI does:
+Run the tests:
 
 ```bash
-# TypeScript (Node 22.18+, which runs the .ts tests directly)
-cd skills/claude/gospelo-md2html && npm ci && npm test && cd -
+# TypeScript (Node 22.18+, which runs the .ts tests directly). npm test runs every test,
+# including tests/ts/browser, which CI skips: on the GitHub Ubuntu runner Chrome cannot
+# build its sandbox without lifting a kernel restriction, which the workflow does not do.
+cd skills/claude/gospelo-md2html && npm ci && node scripts/md2html.mjs setup && npm test && cd -
 # set MD2HTML_TEST_ICONS_ZIP to an AWS icon zip to also run the aws: icon test
 
-# Python (kumihan and extract_markdown.py)
-uv run --python 3.13.1 \
-  --with pytest \
+# Python (kumihan and extract_markdown.py), as CI runs it
+uv run --python 3.14.9 \
+  --with pytest --with brotli \
   --with fonttools==4.65.0 --with uharfbuzz==0.56.2 --with budoux==0.9.2 --with resvg-py \
   pytest -q tests/kumihan tests/test_extract_markdown.py
 ```

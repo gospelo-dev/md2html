@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=scripts/md2html.mjs --external:@gospelo/mermaid-arch --external:puppeteer-core --external:fflate --external:subset-font --external:markdown-it --external:mermaid --banner:js=\"#!/usr/bin/env node\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "npm run build --silent && node --test --test-concurrency=1 '../../../tests/ts/*.test.ts'"
+    "test": "npm run build --silent && node --test --test-concurrency=1 '../../../tests/ts/*.test.ts' '../../../tests/ts/browser/*.test.ts'"
   },
   "dependencies": {
     "@gospelo/mermaid-arch": "file:vendor/gospelo-mermaid-arch-0.1.0-3bd1340.tgz",

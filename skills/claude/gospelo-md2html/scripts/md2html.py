@@ -57,7 +57,8 @@ def setup(node: str, options: list[str]) -> int:
     npm = shutil.which("npm")
     if npm is None:
         return fail("npm not found on PATH; it comes with Node.js")
-    print(f"Installing the npm packages in {SKILL_DIR} ...")
+    # flush: npm writes straight to the terminal, and a buffered line would come out after it
+    print(f"Installing the npm packages in {SKILL_DIR} ...", flush=True)
     if subprocess.run([npm, "ci", "--omit=dev"], cwd=SKILL_DIR, check=False).returncode != 0:
         return fail("npm ci failed")
     return subprocess.run([node, str(BUNDLE), "setup"], check=False).returncode

@@ -54,6 +54,7 @@
         "columns": { "enum": ["two", "split", "single", null] },
         "figureSide": { "enum": ["left", "right"] },
         "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+        "gutter": { "type": ["string", "null"], "pattern": "^[0-9]+(\\.[0-9]+)?(em|px|mm|pt)$", "description": "Gap between columns (em = x body font size). Writers SHOULD record the value they used; null or absent means the writer's default (2em in md2html 0.8; 1.5em before)" },
         "details": { "enum": ["drop", "expand"] },
         "mermaidLib": { "enum": ["prerender", "embed", "link"], "description": "prerender: diagrams written as SVG, no library in the file (the only value md2html 0.7 writes and rebuilds). embed (mermaid.min.js inlined) and link (mermaid-<version>.min.js next to the file) appear in documents written by the Python releases" },
         "mermaidVersion": { "type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Mermaid version the document was paginated with. Writers MUST record it. A reader that draws with another version must not rebuild silently: md2html 0.7 stops unless the new version is accepted explicitly" },
@@ -72,6 +73,7 @@
               "columns": { "enum": ["two", "split", "single"] },
               "figureSide": { "enum": ["left", "right"] },
               "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+              "gutter": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(em|px|mm|pt)$" },
               "maxHeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
               "span": { "enum": [1, 2] }
             }

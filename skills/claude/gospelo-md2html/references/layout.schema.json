@@ -14,6 +14,7 @@
     "columns": { "enum": ["two", "split", "single"] },
     "figureSide": { "enum": ["left", "right"] },
     "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+    "gutter": { "type": ["string", "null"], "pattern": "^[0-9]+(\\.[0-9]+)?(em|px|mm|pt)$", "description": "gap between columns (split and two): em = x body font size; null = 2em. At most 20% of the content width. Generated HTML records the effective value" },
     "details": { "enum": ["drop", "expand"] },
     "mermaidLib": { "enum": ["prerender"], "description": "prerender: diagrams are drawn by mermaid-arch and written as SVG; no library in the file. embed and link (Python releases) are no longer accepted" },
     "mermaidVersion": { "type": ["string", "null"], "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "the Mermaid version mermaid-arch draws with (null = that version). Another version is an error; generated HTML records the effective version" },
@@ -30,7 +31,8 @@
         "properties": {
           "columns": { "enum": ["two", "split", "single"] },
           "figureSide": { "enum": ["left", "right"] },
-          "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6 },
+          "splitRatio": { "type": "number", "minimum": 0.4, "maximum": 0.6, "description": "page: text column fraction of its split layout" },
+          "gutter": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(em|px|mm|pt)$", "description": "page: gap between its columns" },
           "maxHeightRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
           "span": { "enum": [1, 2], "description": "two-column pages: 1 = keep the block in a column, 2 = full-width band" }
         }

@@ -464,12 +464,12 @@ export interface Spill {
 }
 
 /** Re-run pagination per page, keeping page boundaries as the starting point. Returns
- * [new pages, spills]. `existingIds` lists every page id already in use (when only a
- * subset of the document is re-laid out). */
+ * [new pages, spills]. `ctxForPage` gives each page its pagination context (its column
+ * mode, and the heights measured at its column width). `existingIds` lists every page
+ * id already in use (when only a subset of the document is re-laid out). */
 export function spillPages(
   pages: PageJson[],
-  makeCtx: (columns: string) => PaginateContext,
-  layoutColumnsForPage: (page: PageJson) => string,
+  ctxForPage: (page: PageJson) => PaginateContext,
   existingIds?: Set<string>,
 ): [PageJson[], Spill[]] {
   const existing = new Set(existingIds ?? [])
@@ -481,7 +481,7 @@ export function spillPages(
       out.push(page)
       continue
     }
-    const ctx = makeCtx(layoutColumnsForPage(page))
+    const ctx = ctxForPage(page)
     const result = paginate(page.blocks, ctx, page.title, page.continued)
     if (!result.length) {
       out.push(page)
@@ -889,12 +889,21 @@ function balanceRegion(reg: Region, ctx: PaginateContext): void {
  * page that is not a continuation gets its h2 back here; the page right after the cover
  * carries the document title, which the h1 already provides. */
 export function flattenForReflow(pages: PageJson[]): Block[] {
+  return flattenWithSettings(pages, () => null).blocks
+}
+
+/** flattenForReflow, also giving each block the value `settingsOf` returns for the page it
+ * came from (the page's own layout, so a reflow keeps it on the same content). */
+export function flattenWithSettings<S>(pages: PageJson[], settingsOf: (page: PageJson) => S): { blocks: Block[]; settings: S[] } {
   const blocks: Block[] = []
+  const settings: S[] = []
   let prevKind: string | null = null
   for (const page of pages) {
     if (page.kind === 'source') continue
+    const s = settingsOf(page)
     if (page.kind === 'content' && page.title && !page.continued && prevKind !== 'cover') {
       blocks.push({ type: 'heading', level: 2, text: page.title })
+      settings.push(s)
     }
     prevKind = page.kind
     for (const b of page.blocks) {
@@ -912,7 +921,8 @@ export function flattenForReflow(pages: PageJson[]): Block[] {
       const nb = { ...b }
       delete nb.continued
       blocks.push(nb as Block)
+      settings.push(s)
     }
   }
-  return blocks
+  return { blocks, settings }
 }

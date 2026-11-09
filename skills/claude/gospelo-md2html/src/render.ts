@@ -11,7 +11,7 @@ import { FIGURE_TYPES, GENERATOR, SCHEMA_VERSION, SIGNATURE, envelopeScript, mak
 import { renderInline } from './inline.ts'
 import { type Layout, layoutToDict, MERMAID_LIB } from './layout.ts'
 import { esc, fixed, pyFloat } from './py.ts'
-import type { FigureMode, Metrics } from './scale.ts'
+import { checkedGutter, checkSplitRatio, DEFAULT_GUTTER, type FigureMode, type Metrics } from './scale.ts'
 
 export interface RenderContext {
   metrics: Metrics
@@ -171,6 +171,11 @@ export function renderPage(page: Page, ctx: RenderContext, pageNo: number, total
   }
 
   const mode = pageMode(page, ctx)
+  // a page with its own split ratio or gutter (layout overrides) sets the column variables
+  // on its section, and sizes its figures for its own columns
+  const pm = pageMetrics(page.id, ctx)
+  const own = pm !== ctx.metrics
+  const pctx: RenderContext = own ? { ...ctx, metrics: pm } : ctx
   let header = ''
   if (fmt.isSlide) {
     const title = headerTitle(page, ctx, docTitle)
@@ -179,20 +184,37 @@ export function renderPage(page: Page, ctx: RenderContext, pageNo: number, total
   }
   let cols: string
   if (mode === 'two') {
-    cols = renderTwoColumns(page, ctx)
+    cols = renderTwoColumns(page, pctx)
   } else {
     const figure = mode !== 'single' ? firstFigure(page) : null
     const textBlocks = page.blocks.filter((b) => b !== figure)
     const figureMode: FigureMode = mode !== 'single' ? 'split' : 'single'
-    const colText = textBlocks.map((b) => renderBlock(b, ctx, figureMode)).join('\n')
+    const colText = textBlocks.map((b) => renderBlock(b, pctx, figureMode)).join('\n')
     cols = `<div class="column-text">\n${colText}\n</div>`
-    if (figure !== null) cols += `\n<div class="column-figure">${renderBlock(figure, ctx, 'split')}</div>`
+    if (figure !== null) cols += `\n<div class="column-figure">${renderBlock(figure, pctx, 'split')}</div>`
   }
+  const style = own ? ` style="${pm.columnVars()}"` : ''
   // one block per line inside a section so that edits produce block-sized diffs
   return (
-    `<section class="page" data-page-id="${esc(pid)}" data-mode="${mode}">${header}\n` +
+    `<section class="page" data-page-id="${esc(pid)}" data-mode="${mode}"${style}>${header}\n` +
     `<div class="page-body ${mode}">\n${cols}\n</div>\n${footer}</section>`
   )
+}
+
+/** The metrics a page is laid out with: the document's, or a copy with the page's own
+ * split ratio and gutter from the layout overrides (the same object when neither is set). */
+export function pageMetrics(pageId: string, ctx: { layout: Layout; metrics: Metrics }): Metrics {
+  return overrideMetrics(ctx.layout.pageOverride(pageId), ctx.metrics)
+}
+
+/** `m` with the split ratio and gutter of a set of page overrides (`m` itself when they
+ * change nothing). */
+export function overrideMetrics(ov: Record<string, unknown>, m: Metrics): Metrics {
+  const ratio = (ov.splitRatio as number | undefined) ?? m.splitRatio
+  const gutter = ov.gutter === undefined ? m.gutterPx : checkedGutter(ov.gutter as string, m.F, m.contentWPx)
+  if (ratio === m.splitRatio && gutter === m.gutterPx) return m
+  checkSplitRatio(ratio)
+  return m.withColumns(ratio, gutter)
 }
 
 /** Two-column page in column order (left column, then right): segments of [left | right]
@@ -293,6 +315,8 @@ export function effectiveLayout(layout: Layout): Record<string, unknown> {
   const out = layoutToDict(layout)
   out.mermaidLib = MERMAID_LIB
   out.mermaidVersion = assets.mermaidVersion()
+  // the gutter decides column widths, so a later change of the default must not move the pages
+  out.gutter = layout.gutter ?? DEFAULT_GUTTER
   return out
 }
 
@@ -326,14 +350,22 @@ export function renderDocument(doc: Doc, pages: Page[], ctx: RenderContext, date
   return out[0] + '\n' + out.slice(1).join('\n')
 }
 
-/** One or two flow containers (text column width and single width). */
-export function renderMeasureDocument(blocks: Block[], ctx: RenderContext): string {
+/** The width text is measured at for a column mode ('single': the full content width). */
+export function textWidth(columns: string, m: Metrics): number {
+  if (columns === 'two') return m.col2Px
+  if (columns === 'split') return m.textColPx
+  return m.contentWPx
+}
+
+/** One or two flow containers: the text column width for `columns` (default: the
+ * document's) with ctx.metrics, and the single width. */
+export function renderMeasureDocument(blocks: Block[], ctx: RenderContext, columns: string = ctx.metrics.columns): string {
   const m = ctx.metrics
   const [needsFa, needsShiki] = needs(blocks, null)
   const out = [head(ctx, 'measure', needsFa, null, 'ja'), '<body>']
   const widths: Array<[string, number, FigureMode]> = []
-  if (m.columns === 'two') widths.push(['col', m.col2Px, 'col'])
-  else if (m.columns === 'split') widths.push(['col', m.textColPx, 'split'])
+  if (columns === 'two') widths.push(['col', m.col2Px, 'col'])
+  else if (columns === 'split') widths.push(['col', m.textColPx, 'split'])
   widths.push(['single', m.contentWPx, 'single'])
   for (const [name, width, figMode] of widths) {
     out.push(`<div class="measure" data-measure="${name}" style="width:${fixed(width, 2)}px">`)

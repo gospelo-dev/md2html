@@ -69,7 +69,7 @@ The envelope object is identical in the single-file and sidecar forms. Convertin
 {
   "format": "gospelo-document",
   "version": 1,
-  "generator": "gospelo-md2html 0.7.0",
+  "generator": "gospelo-md2html 0.8.0",
   "meta": { "title": "...", "date": "2026-09-21", "source": "report.md", "lang": "ja" },
   "layout": { "page": "16x9", "fontSize": "14pt", "columns": "two" },
   "pages": [

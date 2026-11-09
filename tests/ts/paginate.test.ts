@@ -165,7 +165,7 @@ test('spill keeps page ids and adds suffix', () => {
     ],
   }
   const heights = { 'p05-b0': bh(300, 0, 10), 'p05-b1': bh(300, 0, 10) }
-  const [newPages, spills] = spillPages([page], () => ctx({ capacity: 400, single: heights }), () => 'single')
+  const [newPages, spills] = spillPages([page], () => ctx({ capacity: 400, single: heights }))
   assert.deepEqual(newPages.map((p) => p.id), ['p05', 'p05-2'])
   assert.equal(newPages[1]!.continued, true)
   assert.equal(newPages[1]!.title, 'T')
@@ -220,7 +220,7 @@ test('relayout keeps each page once', () => {
   const paras = [0, 1, 2, 3].map((i) => ({ type: 'paragraph', text: 'x', id: `b${i}` }))
   const current = [page('p26', paras[0], paras[1]), page('p26-2', paras[2], paras[3]), page('p27', { type: 'paragraph', text: 'y', id: 'c' })]
   const spill = (pages: any[], existing: Set<string>) =>
-    spillPages(pages, () => ctx({ capacity: 500, single: heights }), () => 'single', existing)
+    spillPages(pages, () => ctx({ capacity: 500, single: heights }), existing)
   const out = relayoutPages(current, (p) => p.id !== 'p27', spill)
   assert.deepEqual(out.map((p) => p.id), ['p26', 'p26-3', 'p26-2', 'p26-2-2', 'p27'])
   assert.deepEqual(out.map((p) => ids(p.blocks)), [['b0'], ['b1'], ['b2'], ['b3'], ['c']])

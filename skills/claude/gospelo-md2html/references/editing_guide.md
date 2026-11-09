@@ -39,7 +39,10 @@ page  = { "id": "p05", "kind": "cover|content|source", "title": "h2 の文字列
 | html | `html` | 編集非推奨 |
 
 レイアウトの値 (px、mm、CSS、段の側、帯にするかどうか) はブロックに書かない。図をどちらに出すか、
-単段に戻すか、ブロックを帯にするかは `layout.overrides` で指定する。
+単段に戻すか、ブロックを帯にするかは `layout.overrides` で指定する。ページ単位のキーは `columns`、
+`figureSide`、`splitRatio` (0.4 〜 0.6)、`gutter` (`2em`、`40px` など)、ブロック単位のキーは
+`span`、`maxHeightRatio`。ページの `splitRatio` / `gutter` を変えると段の幅が変わるので、`build` が
+そのページの文を測り直し、あふれた分を続きページへ送る (続きページも同じ設定を引き継ぐ)。
 
 ## 手順
 

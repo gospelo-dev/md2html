@@ -108,8 +108,30 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 
 段組 (`--columns`): 横長の用紙は既定で 2 段組 (`two`: 左段 → 右段。左段の上から下へ、次に右段へ
 流す。列数 4 以上の表、コード、横長の図は幅いっぱいの帯)、縦長は単段 (`single`)。
-`split` は図 1 枚をテキストの隣に置く形式。ページやブロック単位の変更はレイアウトの
-`overrides` (`columns`、`span`)。
+`split` は図 1 枚をテキストの隣に置く形式。`--split-ratio` (0.4 〜 0.6) は split のテキスト段の
+比率 (0.4 で 文 2:図 3)、`--gutter` は段の間隔 (`2.5em` = 本文の文字サイズの 2.5 倍、`40px`、
+`10mm`、`30pt`。既定 `2em`、上限は本文幅の 20%)。ページ単位の変更はレイアウトの `overrides`
+(`columns`、`figureSide`、`splitRatio`、`gutter`)、ブロック単位は (`span`、`maxHeightRatio`)。
+
+節ごとの段組は Markdown に書ける。見出しの直後の行に次のコメントを置くと、その見出しから、
+同じかより上のレベルの次の見出しまでを、その設定で組む (スライドなら 1 枚とその続き)。
+段組が変わる所ではページを改める。`import` がその節のページの `overrides` として文書に記録する:
+
+```markdown
+## 構成図
+<!-- layout: columns=single -->
+
+## 料金プラン
+<!-- layout: columns=split split-ratio=0.4 gutter=3em figure-side=left -->
+```
+
+キーは `columns`、`split-ratio`、`gutter`、`figure-side`。見出しの直後以外に置いたコメント、
+段落の中のコメント、知らないキーや値はエラーで止まる。横長の図を大きく見せたいページは
+`columns=single` (図が全幅で上、文が下。図の高さ上限は `maxHeightRatio`) が向く。
+
+段の間隔の既定は 0.8 で `1.5em` から `2em` に変わった。生成した文書は使った値を `layout.gutter`
+に記録する。記録のない 0.7 の文書を `build` すると新しい既定で組み直され、段が少し狭くなる。
+以前の組み方を保つには `--gutter 1.5em` を付ける。
 
 レイアウトの詳細は `references/page_formats.md`、ページ区切りの規則は
 `references/layout_rules.md`、ファイル形式は `references/gospelo-document.schema.json`

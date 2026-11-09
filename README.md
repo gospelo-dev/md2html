@@ -119,13 +119,28 @@ Adding a gate is one more array in `rows`. Text cells keep inline Markdown (`**b
   "columns": "two",
   "overrides": {
     "p07": { "columns": "single" },
+    "p08": { "columns": "split", "splitRatio": 0.4, "gutter": "3em" },
     "p08-b1": { "span": 2 },
     "p09-b0": { "maxHeightRatio": 0.7 }
   }
 }
 ```
 
-Pass it with `--layout layout.json`; CLI options win over the file. `overrides` adjust a single page or block: switch a page to a single column, make a block a full-width band (`span: 2`) or keep it in a column (`span: 1`), cap a figure's height. A page-level `splitRatio` override is accepted but not applied yet; use the document-wide `--split-ratio`.
+Pass it with `--layout layout.json`; CLI options win over the file. `overrides` adjust a single page or block: switch a page to a single column or give it its own split ratio and column gap (`columns`, `figureSide`, `splitRatio`, `gutter`), make a block a full-width band (`span: 2`) or keep it in a column (`span: 1`), cap a figure's height. A page with its own column widths is measured again at those widths, and its continuation pages keep its settings.
+
+### Per-section layout in the Markdown
+
+A comment on the line right after a heading lays out that heading's section (up to the next heading of the same or a higher level; on slides, that slide and its continuations). A new page starts where the layout changes, and `import` records the settings as the overrides of the section's pages:
+
+```markdown
+## Architecture
+<!-- layout: columns=single -->
+
+## Pricing
+<!-- layout: columns=split split-ratio=0.4 gutter=3em figure-side=left -->
+```
+
+Keys: `columns`, `split-ratio`, `gutter`, `figure-side`. A comment that is not right after a heading, a comment inside a paragraph, or an unknown key or value stops the import. `columns=single` suits a wide figure: it takes the full width above the text.
 
 ### Options
 
@@ -140,7 +155,8 @@ Pass it with `--layout layout.json`; CLI options win over the file. `overrides` 
 | `--header-title` | `section` | `section` (current h2), `doc` (document h1) or `fixed:<text>` |
 | `--columns` | landscape `two`, portrait `single` | `two` (column order, left column then right, with full-width bands), `split` (one figure beside the text), `single` |
 | `--figure-side` | `right` | Figure column side in `split` layout |
-| `--split-ratio` | `0.5` | Text column fraction in `split` layout (0.4 to 0.6) |
+| `--split-ratio` | `0.5` | Text column fraction in `split` layout (0.4 to 0.6; 0.4 gives text 2 : figure 3) |
+| `--gutter` | `2em` | Gap between columns in `two` and `split` layouts: `em` (times the body size), `px`, `mm` or `pt`, at most 20% of the content width. Recorded in the file. Before 0.8 the gap was 1.5em; files from 0.7 that record no gutter are rebuilt with 2em unless you pass `--gutter 1.5em` |
 | `--details` | `drop` | `<details>` handling; Mermaid sources inside folds are always rescued |
 | `--icons-zip PATH` | | `import` / `check` / `build`: the AWS Architecture Icons zip (`Icon-package_*.zip`). Required when a diagram uses `aws:` icons; without it the command stops (`icons-zip-missing`) and shows the fix. The path is not recorded in the file, so pass it on every build |
 | `--chrome PATH` | | chrome-headless-shell executable (default: `CHROME_PATH`, `PUPPETEER_EXECUTABLE_PATH`, then puppeteer's cache) |

@@ -106,6 +106,37 @@ test('the ELK fixture draws every way of asking for ELK, and an unknown layout s
   assert.match(r.out, /asks for layout 'elk\.bogus'.*dagre instead/)
 })
 
+test('a layout comment lays out its section on pages of its own, through build and reflow', () => {
+  const dir = tmp()
+  const long = Array.from({ length: 14 }, (_, i) => `Paragraph ${i + 1}. ` + 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(4)).join('\n\n')
+  const md = join(dir, 'cols.md')
+  writeFileSync(md, `# Deck\n\n## Two\n\nintro\n\n## Single\n<!-- layout: columns=single gutter=3em -->\n\n${long}\n\n## Split\n<!-- layout: columns=split split-ratio=0.4 -->\n\n\`\`\`mermaid\nflowchart TD\n  A --> B\n\`\`\`\n\nbeside\n\n## After\n\nend\n`)
+  const html = join(dir, 'cols.gospelo.html')
+  let r = md2html('import', md, '--page', '16x9', '--date', '2026-01-01')
+  assert.equal(r.code, 0, r.out)
+  const pagesOf = (): Array<{ id: string; title: string; mode: string }> => {
+    const text = readFileSync(html, 'utf-8')
+    const env = JSON.parse(text.slice(text.indexOf('{', text.indexOf('id="gospelo-document"')), text.indexOf('</script>')))
+    const modes = new Map([...text.matchAll(/data-page-id="([^"]+)" data-mode="([^"]+)"/g)].map((m) => [m[1]!, m[2]!]))
+    return env.pages.filter((p: any) => p.kind === 'content').map((p: any) => ({ id: p.id, title: p.title, mode: modes.get(p.id)! }))
+  }
+  const check = (label: string) => {
+    const pages = pagesOf()
+    const single = pages.filter((p) => p.title === 'Single')
+    assert.ok(single.length >= 2, `${label}: the long section spills onto a continuation page`)
+    for (const p of single) assert.equal(p.mode, 'single', `${label}: ${p.id}`)
+    assert.deepEqual(pages.filter((p) => p.title === 'Split').map((p) => p.mode), ['split-right'], label)
+    for (const p of pages.filter((p) => p.title === 'Two' || p.title === 'After')) assert.equal(p.mode, 'two', `${label}: ${p.id}`)
+  }
+  check('import')
+  r = md2html('build', html)
+  assert.equal(r.code, 0, r.out)
+  check('build')
+  r = md2html('build', html, '--reflow')
+  assert.equal(r.code, 0, r.out)
+  check('reflow')
+})
+
 test('usage errors exit with 2', () => {
   const elk = md2html('setup', '--elk')
   assert.equal(elk.code, 2)

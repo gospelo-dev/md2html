@@ -23,7 +23,7 @@ import { Browser, MeasureError, measureDocument, verifyDocument } from './measur
 import { DiagramError, Diagrams, LayoutRequestError } from './mermaid.ts'
 import {
   BlockHeight,
-  flattenForReflow,
+  flattenWithSettings,
   paginate,
   type PaginateContext,
   relayoutPages,
@@ -41,7 +41,11 @@ import {
   RenderError,
   renderDocument,
   renderMeasureDocument,
+  overrideMetrics,
+  pageMetrics,
+  textWidth,
 } from './render.ts'
+import { type PageSettings, PAGE_ID_RE, remapPageOverrides, runs, sectionSettings } from './sections.ts'
 import * as reportMod from './report.ts'
 import type { VerifyPage } from './report.ts'
 import { buildMetrics, type Metrics, SAFETY } from './scale.ts'
@@ -74,6 +78,11 @@ const LAYOUT_OPTS: Record<string, Opt> = {
   columns: { type: 'string', choices: ['two', 'split', 'single'], help: 'two = two columns, left then right (default on landscape paper), split = one figure beside the text, single' },
   'figure-side': { type: 'string', choices: ['left', 'right'], help: 'side of the figure column in split pages' },
   'split-ratio': { type: 'string', help: 'text column fraction in split pages (0.4 to 0.6)', metavar: 'FLOAT' },
+  gutter: {
+    type: 'string',
+    metavar: 'LENGTH',
+    help: 'gap between columns (split and two): em (x body font size), px, mm or pt (default 2em)',
+  },
   details: { type: 'string', choices: ['drop', 'expand'], help: 'what to do with <details> blocks' },
   'mermaid-lib': {
     type: 'string',
@@ -253,6 +262,7 @@ function layoutFromArgs(args: Args, base: Record<string, unknown> | null = null)
     columns: str(args, 'columns'),
     figureSide: str(args, 'figure-side'),
     splitRatio: floatArg(args, 'split-ratio'),
+    gutter: str(args, 'gutter'),
     details: str(args, 'details'),
     mermaidLib: str(args, 'mermaid-lib'),
     mermaidVersion: str(args, 'mermaid-version'),
@@ -266,7 +276,15 @@ function layoutFromArgs(args: Args, base: Record<string, unknown> | null = null)
 }
 
 function metricsFromLayout(layout: Layout): Metrics {
-  return buildMetrics(getFormat(layout.page), layout.fontSize, layout.titleScale, layout.columns, layout.figureSide, layout.splitRatio)
+  return buildMetrics(
+    getFormat(layout.page),
+    layout.fontSize,
+    layout.titleScale,
+    layout.columns,
+    layout.figureSide,
+    layout.splitRatio,
+    layout.gutter,
+  )
 }
 
 function today(): string {
@@ -328,9 +346,9 @@ async function withSession<T>(s: Session, fn: (s: Session) => Promise<T>): Promi
   }
 }
 
-function renderContext(s: Session, htmlDir: string | null, svgs: Map<string, string>): RenderContext {
+function renderContext(s: Session, htmlDir: string | null, svgs: Map<string, string>, metrics: Metrics = s.metrics): RenderContext {
   return {
-    metrics: s.metrics,
+    metrics,
     layout: s.layout,
     imageBase: s.imageBase,
     htmlDir,
@@ -349,13 +367,17 @@ function writeTemp(path: string, text: string): void {
   writeFileSync(path, text, { encoding: 'utf-8', flag: 'wx' })
 }
 
+/** Heights of `blocks` at the text column width of `columns` with `metrics` (the col
+ * table; the single-width table when columns is 'single') and at the full width. */
 async function measureHeights(
   s: Session,
   blocks: Block[],
   workDir: string,
+  metrics: Metrics = s.metrics,
+  columns: string = metrics.columns,
 ): Promise<[Record<string, BlockHeight>, Record<string, BlockHeight>]> {
-  const ctx = renderContext(s, null, await s.diagrams.svgsFor(blocks))
-  const htmlText = renderMeasureDocument(blocks, ctx)
+  const ctx = renderContext(s, null, await s.diagrams.svgsFor(blocks), metrics)
+  const htmlText = renderMeasureDocument(blocks, ctx, columns)
   const path = tempHtml(workDir, 'measure')
   let raw
   try {
@@ -398,6 +420,55 @@ function makePaginateCtx(
     colBox: [colW, colH * colR],
     bandBox: [bandW, bandH * bandR],
   }
+}
+
+/** Paginate `blocks` from scratch, each run of blocks with the same page settings
+ * (`<!-- layout: ... -->` sections, or the page overrides a reflow carries over) on pages
+ * of its own. Text is measured at each run's column width. Returns the pages with ids
+ * assigned (p01, ...), and records each run's settings as the page overrides of its pages
+ * (an override already given for that page id wins). */
+async function paginateRuns(
+  s: Session,
+  blocks: Block[],
+  settings: Array<PageSettings | null>,
+  docTitle: string,
+  workDir: string,
+  verbose: boolean,
+): Promise<{ pages: Page[]; warnings: string[] }> {
+  const warnings: string[] = []
+  const [heightsCol, heightsSingle] = await measureHeights(s, blocks, workDir)
+  if (verbose) printVerboseHeights(heightsCol)
+  const docKey = `${s.metrics.columns}:${fixed(textWidth(s.metrics.columns, s.metrics), 3)}`
+  const tables = new Map<string, Record<string, BlockHeight>>([[docKey, heightsCol]])
+  const plan = runs(blocks, settings).map((run) => {
+    const metrics = run.settings ? overrideMetrics(run.settings, s.metrics) : s.metrics
+    const columns = (run.settings?.columns as string | undefined) ?? s.metrics.columns
+    return { ...run, metrics, columns, key: `${columns}:${fixed(textWidth(columns, metrics), 3)}` }
+  })
+  for (const run of plan) {
+    if (run.columns === 'single' || tables.has(run.key)) continue
+    const same = plan.filter((r) => r.key === run.key).flatMap((r) => r.blocks)
+    const [col] = await measureHeights(s, same, workDir, run.metrics, run.columns)
+    tables.set(run.key, col)
+  }
+  const pages: Page[] = []
+  const pageSettings: Array<PageSettings | null> = []
+  for (const run of plan) {
+    const col = run.columns === 'single' ? heightsSingle : tables.get(run.key)!
+    const ctx = makePaginateCtx(run.metrics, run.columns, col, heightsSingle, docTitle, s.layout)
+    ctx.warnings = warnings
+    // a run that starts mid-section continues the title of the page before it
+    const last = pages[pages.length - 1]
+    const out = paginate(run.blocks, ctx, last ? last.title : null, last ? last.title !== null : false).map((p) => p.toJson())
+    pages.push(...out)
+    pageSettings.push(...out.map(() => run.settings))
+  }
+  assignPageIds(pages)
+  pages.forEach((p, i) => {
+    const ps = pageSettings[i]
+    if (ps) s.layout.overrides[p.id] = { ...ps, ...(s.layout.overrides[p.id] ?? {}) }
+  })
+  return { pages, warnings }
 }
 
 function assignPageIds(pages: Page[], start = 1): void {
@@ -452,7 +523,7 @@ async function verifyAndFix(
         `verification did not converge after ${MAX_VERIFY_ROUNDS} rounds; overflowing pages: ${overflowing.map((v) => v.id).join(', ')}`,
       )
     }
-    pages = pushLastBlocks(pages, new Map(overflowing.map((v) => [v.id, v])))
+    pages = pushLastBlocks(pages, new Map(overflowing.map((v) => [v.id, v])), s.layout)
     if (relayout !== null) pages = relayout(pages)
   }
 }
@@ -460,7 +531,7 @@ async function verifyAndFix(
 /** Move the last text block of each overflowing page to a continuation page. A lone
  * table / list / code block is split using the unit heights measured in the verify pass
  * instead, so a single-block page can always make progress. */
-function pushLastBlocks(pages: Page[], overflowing: Map<string, VerifyPage>): Page[] {
+function pushLastBlocks(pages: Page[], overflowing: Map<string, VerifyPage>, layout: Layout): Page[] {
   const out: Page[] = []
   const existing = new Set(pages.map((p) => p.id))
   for (const page of pages) {
@@ -495,6 +566,7 @@ function pushLastBlocks(pages: Page[], overflowing: Map<string, VerifyPage>): Pa
     while (existing.has(`${page.id}-${n}`)) n += 1
     const newId = `${page.id}-${n}`
     existing.add(newId)
+    inheritPageOverride(layout, page.id, newId)
     const shrunk: Page = { ...page, blocks: keep }
     delete shrunk._layout // placement is recomputed by relayout()
     out.push(shrunk)
@@ -630,7 +702,8 @@ async function cmdImport(args: Args): Promise<number> {
   const original = readFileSync(src, 'utf-8')
   const notes = new blocksMod.ImportNotes()
   const text = blocksMod.preprocessMarkdown(original, layout.details, notes)
-  const blockList = blocksMod.parseBlocks(text, layout.hrBreak, notes)
+  // `<!-- layout: ... -->` after a heading: that section's page layout
+  const { blocks: blockList, settings: blockSettings } = sectionSettings(blocksMod.parseBlocks(text, layout.hrBreak, notes))
   if (!blockList.length) throw new CliError('no content blocks found in the Markdown')
   blockList.forEach((b, i) => (b.id = `b${i}`))
   const stem = basename(src, extname(src))
@@ -650,11 +723,7 @@ async function cmdImport(args: Args): Promise<number> {
   const session = await openSession(args, layout, metrics, imageBase, css, blockList)
 
   const { finalPages, verify, rounds, warnings, htmlText, oldIds } = await withSession(session, async (s) => {
-    const [heightsCol, heightsSingle] = await measureHeights(s, blockList, workDir)
-    if (verbose) printVerboseHeights(heightsCol)
-    const pctx = makePaginateCtx(metrics, metrics.columns, heightsCol, heightsSingle, title, layout)
-    const firstPass = paginate(blockList, pctx).map((p) => p.toJson())
-    assignPageIds(firstPass)
+    const { pages: firstPass } = await paginateRuns(s, blockList, blockSettings, title, workDir, verbose)
     dropRuntimeKeys(firstPass)
     doc.pages.push(...firstPass)
     contentMod.validateContent(doc, outPath)
@@ -664,9 +733,12 @@ async function cmdImport(args: Args): Promise<number> {
     // they really render, so a later `build` of the written document does not move anything.
     const [pages, , warnings, relayout] = await buildPages(s, doc, workDir, verbose)
     const [, verify, rounds, finalPages, codeHtml] = await verifyAndFix(s, doc, pages, workDir, date, workDir, verbose, relayout)
-    // spills and pushes add pages such as p09-2: renumber sequentially
+    // spills and pushes add pages such as p09-2: renumber sequentially, and move the pages'
+    // own layout overrides to their new ids
     const oldIds = finalPages.map((p) => p.blocks.map((b) => b.id as string | undefined))
+    const oldPageIds = finalPages.map((p) => p.id)
     assignPageIds(finalPages)
+    layout.overrides = remapPageOverrides(layout.overrides, new Map(oldPageIds.map((id, i) => [id, finalPages[i]!.id])))
     // the HTML is rendered from the renumbered pages while their column placement is still
     // attached; block ids are still the settle-pass ones, which the drawn code is keyed by
     let htmlText: string | null = null
@@ -739,21 +811,61 @@ async function buildPages(
     if (mode === 'two') return 'two'
     return mode === 'single' ? 'single' : 'split'
   }
-  const makeCtx = (columns: string): PaginateContext => {
-    const ctx = makePaginateCtx(s.metrics, columns, heightsCol, heightsSingle, doc.meta.title, s.layout)
+  // Text is measured at the width of its column. Pages whose column differs from the
+  // document's (their own split ratio, gutter or column mode) get their blocks measured
+  // again at that width; the tables are keyed by mode and width.
+  const widthKey = (columns: string, m: Metrics): string => `${columns}:${fixed(textWidth(columns, m), 3)}`
+  const tables = new Map<string, Record<string, BlockHeight>>([[widthKey(s.metrics.columns, s.metrics), heightsCol]])
+  const colTable = (page: Page): Record<string, BlockHeight> => {
+    const columns = columnsForPage(page)
+    if (columns === 'single') return heightsSingle
+    const table = tables.get(widthKey(columns, pageMetrics(page.id, probe)))
+    if (table === undefined) throw new CliError(`internal: no heights measured for the columns of page ${page.id}`)
+    return table
+  }
+  const groups = new Map<string, { columns: string; metrics: Metrics; blocks: Block[] }>()
+  for (const page of pages) {
+    const columns = columnsForPage(page)
+    if (page.kind !== 'content' || columns === 'single') continue
+    const pm = pageMetrics(page.id, probe)
+    const key = widthKey(columns, pm)
+    if (tables.has(key)) continue
+    const g = groups.get(key) ?? { columns, metrics: pm, blocks: [] }
+    g.blocks.push(...page.blocks)
+    groups.set(key, g)
+  }
+  for (const [key, g] of groups) {
+    const [col] = await measureHeights(s, g.blocks, workDir, g.metrics, g.columns)
+    tables.set(key, col)
+  }
+
+  const ctxForPage = (page: Page): PaginateContext => {
+    const ctx = makePaginateCtx(pageMetrics(page.id, probe), columnsForPage(page), colTable(page), heightsSingle, doc.meta.title, s.layout)
     ctx.warnings = warnings
     return ctx
   }
-  const [newPages, spills] = spillPages(pages, makeCtx, columnsForPage)
+  // a page's continuation pages keep the page's own layout overrides
+  const spill = (pgs: Page[], existing?: Set<string>): [Page[], Spill[]] => {
+    const [out, sp] = spillPages(pgs, ctxForPage, existing)
+    for (const x of sp) inheritPageOverride(s.layout, x.source, x.target)
+    return [out, sp]
+  }
+  const [newPages, spills] = spill(pages)
 
   // pages created by the verify pass (pushed blocks) have no two-column placement yet;
   // blocks split by the verify pass have no measured height, and such pages keep the
   // full-width rendering instead of being re-laid out
   const needsRelayout = (p: Page): boolean =>
-    p.kind === 'content' && !('_layout' in p) && columnsForPage(p) === 'two' && p.blocks.every((b) => b.id in heightsCol)
-  const relayout = (current: Page[]): Page[] =>
-    relayoutPages(current, needsRelayout, (pgs, existing) => spillPages(pgs, makeCtx, columnsForPage, existing))
+    p.kind === 'content' && !('_layout' in p) && columnsForPage(p) === 'two' && p.blocks.every((b) => b.id in colTable(p))
+  const relayout = (current: Page[]): Page[] => relayoutPages(current, needsRelayout, spill)
   return [newPages, spills, warnings, relayout]
+}
+
+/** Give page `to` (a continuation of `from`) the page-level layout overrides of `from`. */
+function inheritPageOverride(layout: Layout, from: string, to: string): void {
+  const ov = layout.pageOverride(from)
+  if (!Object.keys(ov).length) return
+  layout.overrides[to] = { ...ov, ...(layout.overrides[to] ?? {}) }
 }
 
 function spillEntries(spills: Spill[]): reportMod.SpillEntry[] {
@@ -851,16 +963,17 @@ async function cmdBuild(args: Args): Promise<number> {
 
 /** Re-paginate every block from scratch. Returns [doc with new pages, warnings]. */
 async function reflowDoc(args: Args, doc: Doc, layout: Layout, metrics: Metrics, imageBase: string, workDir: string): Promise<[Doc, string[]]> {
-  const flat = flattenForReflow(doc.pages)
+  // a page's own layout (its page overrides) goes with its content, and the pages that
+  // content lands on get it again; the old page-id overrides would land on other pages
+  const { blocks: flat, settings } = flattenWithSettings(doc.pages, (page): PageSettings | null => {
+    const ov = layout.pageOverride(page.id)
+    return Object.keys(ov).length ? ov : null
+  })
+  for (const key of Object.keys(layout.overrides)) if (PAGE_ID_RE.test(key)) delete layout.overrides[key]
   flat.forEach((b, i) => (b.id = `b${i}`))
   const css = await fontCss(doc, layout, flat)
   const session = await openSession(args, layout, metrics, imageBase, css, flat)
-  const [pages, warnings] = await withSession(session, async (s) => {
-    const [heightsCol, heightsSingle] = await measureHeights(s, flat, workDir)
-    const pctx = makePaginateCtx(metrics, metrics.columns, heightsCol, heightsSingle, doc.meta.title, layout)
-    return [paginate(flat, pctx).map((p) => p.toJson()), pctx.warnings] as const
-  })
-  assignPageIds(pages)
+  const { pages, warnings } = await withSession(session, (s) => paginateRuns(s, flat, settings, doc.meta.title, workDir, false))
   for (const p of pages) for (const b of p.blocks) delete b.id
   const head = doc.pages[0]!.kind === 'source' ? [doc.pages[0]!] : []
   doc.pages = [...head, ...pages]

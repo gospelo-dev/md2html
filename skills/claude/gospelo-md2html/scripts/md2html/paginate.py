@@ -433,6 +433,26 @@ def spill_pages(pages: list[dict[str, Any]], make_ctx, layout_columns_for_page,
     return out, spills
 
 
+def relayout_pages(current: list[dict[str, Any]], needs_relayout, spill) -> list[dict[str, Any]]:
+    """Re-lay out the pages selected by `needs_relayout`, each in its place: the page is
+    replaced by itself and the continuation pages it produced. `spill(pages, existing_ids)`
+    is spill_pages bound to a context.
+
+    Each page is spilled on its own. When several pages were spilled together, their results
+    were put back by id prefix, so a page such as p26-2 (pushed out of p26 and re-laid out in
+    the same pass) was taken in as a continuation of p26 and then added again in its own place."""
+    existing = {p["id"] for p in current}
+    out: list[dict[str, Any]] = []
+    for page in current:
+        if not needs_relayout(page):
+            out.append(page)
+            continue
+        fixed, _ = spill([page], existing)
+        existing |= {p["id"] for p in fixed}
+        out.extend(fixed)
+    return out
+
+
 def _unique_id(base: str, existing: set[str]) -> str:
     n = 2
     while f"{base}-{n}" in existing:

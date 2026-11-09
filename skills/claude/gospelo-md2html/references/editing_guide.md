@@ -28,7 +28,7 @@ page  = { "id": "p05", "kind": "cover|content|source", "title": "h2 の文字列
 | --- | --- | --- |
 | paragraph | `text` (インライン Markdown) | `"text": "**太字** と `code` と [link](url)"` |
 | heading | `level` (2-4), `text` | |
-| list | `ordered`, `items[].text`, `items[].children`, `start` (任意) | 項目を足す: `items` に `{"text": "..."}` を追加 |
+| list | `ordered`, `items[].text`, `items[].children`, `items[].childrenOrdered` (任意), `start` (任意) | 項目を足す: `items` に `{"text": "..."}` を追加。`childrenOrdered` は `children` が番号付きかどうかで、省くと親のリストと同じ。番号付きの手順の下に箇条書きを置くときは `false` |
 | table | `header`, `rows`, `align` (任意), `continued` (任意) | 行を足す: `rows` に配列を 1 つ追加。列数は `header` と同じ |
 | code | `lang`, `lines` (1 行 1 要素), `continued` (任意) | |
 | image | `src` (Markdown 基準の相対パス), `alt`, `caption` (任意) | サイズは書かない |

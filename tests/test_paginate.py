@@ -7,7 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "claude" / "gospelo-md2html" / "scripts"))
 
-from md2html.paginate import BlockHeight, PaginateContext, paginate, spill_pages, flatten_for_reflow  # noqa: E402
+from md2html.paginate import (  # noqa: E402
+    BlockHeight, PaginateContext, flatten_for_reflow, paginate, relayout_pages, spill_pages,
+)
 
 LINE = 24.0
 
@@ -159,3 +161,24 @@ def test_reflow_restores_slide_section_headings():
     # portrait documents keep h2 as blocks and have no page titles: nothing is added
     plain = [{"id": "p1", "kind": "content", "title": None, "continued": False, "blocks": [para]}]
     assert flatten_for_reflow(plain) == [para]
+
+
+def test_relayout_keeps_each_page_once():
+    # p26-2 was pushed out of p26 by the verify pass; both are re-laid out in the same pass and
+    # both overflow. p26-2 used to be taken in as a continuation of p26 (id prefix "p26-") and then
+    # added again in its own place
+    def page(pid, *blocks):
+        return {"id": pid, "kind": "content", "title": "T", "continued": True, "blocks": list(blocks)}
+
+    heights = {f"b{i}": BlockHeight(300, 0, 10) for i in range(4)}
+    paras = [{"type": "paragraph", "text": "x", "id": f"b{i}"} for i in range(4)]
+    current = [page("p26", paras[0], paras[1]), page("p26-2", paras[2], paras[3]),
+               page("p27", {"type": "paragraph", "text": "y", "id": "c"})]
+
+    def spill(pages, existing):
+        return spill_pages(pages, lambda _c: ctx([], capacity=500, single_heights=heights),
+                           lambda _p: "single", existing_ids=existing)
+
+    out = relayout_pages(current, lambda p: p["id"] != "p27", spill)
+    assert [p["id"] for p in out] == ["p26", "p26-3", "p26-2", "p26-2-2", "p27"]
+    assert [[b["id"] for b in p["blocks"]] for p in out] == [["b0"], ["b1"], ["b2"], ["b3"], ["c"]]

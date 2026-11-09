@@ -100,6 +100,7 @@ Hiragino は埋め込めず、可変フォントはアウトライン化され�
 | header title truncated | h2 が長い。h2 を短くするか `--header-title fixed:<text>` |
 | block ... taller than a page | 1 ブロックがページに入らない (表の 1 行が巨大など)。内容の構造を見直す提案をする |
 | droppedDetails | `<details>` を捨てた。本文として必要なら `--details expand` |
+| droppedListBlocks | 入れ子のリストの項目の中にあったコード、表、引用などを捨てた (入れ子の項目は文字と子のリストしか持てない)。一番外のリストの項目の中なら、リストを区切ってブロックとして残すので、このメモは出ない。残したいなら Markdown で一番外の項目の下に移す |
 | verification did not converge (終了コード 2) | 3 回送っても収まらない。レポートのページを利用者に示す |
 | no gospelo-document envelope found | 0.2 より前の出力。`extract_markdown.py` で原文を取り出して `import` し直す |
 

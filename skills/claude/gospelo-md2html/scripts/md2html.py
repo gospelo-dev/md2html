@@ -37,7 +37,9 @@ from md2html.fonts import embedded_font_css  # noqa: E402
 from md2html.formats import get_format  # noqa: E402
 from md2html.layout import Layout, LayoutError, build_layout  # noqa: E402
 from md2html.measure import Browser, MeasureError, measure_document, verify_document  # noqa: E402
-from md2html.paginate import BlockHeight, PaginateContext, Spill, flatten_for_reflow, paginate, spill_pages  # noqa: E402
+from md2html.paginate import (  # noqa: E402
+    BlockHeight, PaginateContext, Spill, flatten_for_reflow, paginate, relayout_pages, spill_pages,
+)
 from md2html.render import RenderContext, effective_layout, first_figure, page_mode, render_document, render_measure_document  # noqa: E402
 from md2html.scale import SAFETY, Metrics, build_metrics  # noqa: E402
 
@@ -465,6 +467,7 @@ def _notes_dict(notes: blocks_mod.ImportNotes) -> dict[str, Any]:
         "discardedImages": notes.discarded_images,
         "htmlBlocks": notes.html_blocks,
         "ignoredHr": notes.ignored_hr,
+        "droppedListBlocks": notes.dropped_list_blocks,
     }
 
 
@@ -517,27 +520,16 @@ def _build_pages(browser: Browser, doc, layout: Layout, metrics: Metrics, image_
 
     new_pages, spills = spill_pages(pages, make_ctx, columns_for_page)
 
-    def relayout(current: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def needs_relayout(p: dict[str, Any]) -> bool:
         # pages created by the verify pass (pushed blocks) have no two-column placement yet
         # blocks split by the verify pass (ids ending in .2) have no measured height; such pages
         # keep the full-width fallback rendering instead of being re-laid out
-        todo = [p for p in current if p["kind"] == "content" and "_layout" not in p and columns_for_page(p) == "two"
-                and all(b["id"] in heights_col for b in p["blocks"])]
-        if not todo:
-            return current
-        fixed, _ = spill_pages(todo, make_ctx, columns_for_page, existing_ids={p["id"] for p in current})
-        by_id = {p["id"]: p for p in fixed}
-        out: list[dict[str, Any]] = []
-        for p in current:
-            if p["id"] in by_id:
-                out.append(by_id.pop(p["id"]))
-                # continuation pages produced for this page follow it in `fixed`
-                for extra in fixed:
-                    if extra["id"].startswith(p["id"] + "-") and extra["id"] in by_id:
-                        out.append(by_id.pop(extra["id"]))
-            else:
-                out.append(p)
-        return out
+        return (p["kind"] == "content" and "_layout" not in p and columns_for_page(p) == "two"
+                and all(b["id"] in heights_col for b in p["blocks"]))
+
+    def relayout(current: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return relayout_pages(current, needs_relayout,
+                              lambda pages, existing: spill_pages(pages, make_ctx, columns_for_page, existing_ids=existing))
 
     return new_pages, spills, warnings, relayout
 

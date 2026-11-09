@@ -82,7 +82,8 @@ def _render_list(items: list[dict[str, Any]], ordered: bool, attr: str, top: boo
         marker = f' data-item="{i}"' if top else ""
         inner = render_inline(item["text"])
         if item.get("children"):
-            inner += _render_list(item["children"], ordered, "", top=False)
+            # a nested list may differ from its parent (numbered steps with bullet notes)
+            inner += _render_list(item["children"], item.get("childrenOrdered", ordered), "", top=False)
         out.append(f"<li{marker}>{inner}</li>")
     out.append(f"</{tag}>")
     return "".join(out)

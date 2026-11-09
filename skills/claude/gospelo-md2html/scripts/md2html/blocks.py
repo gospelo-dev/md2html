@@ -33,6 +33,8 @@ class ImportNotes:
     discarded_images: list[str] = field(default_factory=list)
     html_blocks: int = 0
     ignored_hr: int = 0
+    # blocks (code, table, quote ...) inside a nested list item: a nested item cannot hold them
+    dropped_list_blocks: list[str] = field(default_factory=list)
 
 
 def preprocess_markdown(text: str, details_mode: str, notes: ImportNotes) -> str:
@@ -78,7 +80,10 @@ def preprocess_markdown(text: str, details_mode: str, notes: ImportNotes) -> str
 # --------------------------------------------------------------------------
 
 def parse_blocks(text: str, hr_break: bool, notes: ImportNotes) -> list[dict[str, Any]]:
-    tokens = _md.parse(text)
+    return _fold(_md.parse(text), hr_break, notes)
+
+
+def _fold(tokens, hr_break: bool, notes: ImportNotes) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     i = 0
     n = len(tokens)
@@ -96,7 +101,7 @@ def parse_blocks(text: str, hr_break: bool, notes: ImportNotes) -> list[dict[str
             i += 3
         elif t in ("bullet_list_open", "ordered_list_open"):
             j = _find_close(tokens, i)
-            blocks.append(_list_block(tokens[i:j + 1]))
+            blocks.extend(_list_blocks(tokens[i:j + 1], hr_break, notes))
             i = j + 1
         elif t == "table_open":
             j = _find_close(tokens, i)
@@ -155,43 +160,106 @@ def _paragraph_block(inline) -> dict[str, Any]:
     return {"type": "paragraph", "text": inline.content.strip()}
 
 
-def _list_block(tokens) -> dict[str, Any]:
+# Block-level content a list item cannot hold: an item keeps inline text and nested lists only.
+_ITEM_BREAKERS = ("fence", "code_block", "table_open", "blockquote_open", "html_block", "hr", "heading_open")
+_LIST_OPENS = ("bullet_list_open", "ordered_list_open")
+
+
+def _list_blocks(tokens, hr_break: bool, notes: ImportNotes) -> list[dict[str, Any]]:
+    """Fold a top-level list. A code block, table, quote or other block inside an item ends
+    the list at that item: the item's text stays in the list, the item's remaining content
+    follows as top-level blocks, and the next items continue in a new list that keeps the
+    numbering. Dropping such content would lose commands written under numbered steps."""
     ordered = tokens[0].type == "ordered_list_open"
-    return {"type": "list", "ordered": ordered, "items": _items(tokens[1:-1])}
+    start = _list_start(tokens[0]) if ordered else 1
+    out: list[dict[str, Any]] = []
+    current: list[dict[str, Any]] = []
+    for inner in _item_spans(tokens[1:-1]):
+        item, rest = _item(inner, ordered, nested=False, notes=notes)
+        current.append(item)
+        if rest:
+            out.append(_list(ordered, current, start))
+            start += len(current)
+            current = []
+            out.extend(_fold(rest, hr_break, notes))
+    if current:
+        out.append(_list(ordered, current, start))
+    return out
 
 
-def _items(tokens) -> list[dict[str, Any]]:
-    items = []
+def _list(ordered: bool, items: list[dict[str, Any]], start: int) -> dict[str, Any]:
+    block: dict[str, Any] = {"type": "list", "ordered": ordered, "items": items}
+    if ordered and start != 1:
+        block["start"] = start
+    return block
+
+
+def _list_start(tok) -> int:
+    value = tok.attrGet("start")
+    return int(value) if value is not None else 1
+
+
+def _item_spans(tokens):
     i = 0
     while i < len(tokens):
         if tokens[i].type != "list_item_open":
             i += 1
             continue
         j = _find_close(tokens, i)
-        inner = tokens[i + 1:j]
-        texts = []
-        children: list[dict[str, Any]] = []
-        k = 0
-        while k < len(inner):
-            tk = inner[k]
-            if tk.type == "paragraph_open":
-                texts.append(inner[k + 1].content.strip())
-                k += 3
-            elif tk.type in ("bullet_list_open", "ordered_list_open"):
-                m = _find_close(inner, k)
-                children.extend(_items(inner[k + 1:m]))
-                k = m + 1
-            elif tk.type == "inline":
-                texts.append(tk.content.strip())
-                k += 1
-            else:
-                k += 1
-        item: dict[str, Any] = {"text": " ".join(texts)}
-        if children:
-            item["children"] = children
-        items.append(item)
+        yield tokens[i + 1:j]
         i = j + 1
-    return items
+
+
+def _item(inner, parent_ordered: bool, nested: bool, notes: ImportNotes):
+    """Returns (item, rest). `rest` is the token run from the first block the item cannot
+    hold to the end of the item (top-level items only; empty when there is none)."""
+    texts: list[str] = []
+    children: list[dict[str, Any]] = []
+    children_ordered: bool | None = None
+    rest: list = []
+    k = 0
+    while k < len(inner):
+        tk = inner[k]
+        if tk.type in _ITEM_BREAKERS:
+            if not nested:
+                rest = inner[k:]
+                break
+            # a nested item has no place to put the block: report it instead of losing it silently
+            end = _find_close(inner, k) if tk.nesting == 1 else k
+            notes.dropped_list_blocks.append(_describe(inner[k:end + 1]))
+            k = end + 1
+        elif tk.type == "paragraph_open":
+            texts.append(inner[k + 1].content.strip())
+            k += 3
+        elif tk.type in _LIST_OPENS:
+            m = _find_close(inner, k)
+            sub_ordered = tk.type == "ordered_list_open"
+            if children_ordered is None:
+                children_ordered = sub_ordered
+            children.extend(_nested_items(inner[k + 1:m], sub_ordered, notes))
+            k = m + 1
+        elif tk.type == "inline":
+            texts.append(tk.content.strip())
+            k += 1
+        else:
+            k += 1
+    item: dict[str, Any] = {"text": " ".join(texts)}
+    if children:
+        item["children"] = children
+        if children_ordered != parent_ordered:
+            item["childrenOrdered"] = children_ordered
+    return item, rest
+
+
+def _nested_items(tokens, ordered: bool, notes: ImportNotes) -> list[dict[str, Any]]:
+    return [_item(inner, ordered, nested=True, notes=notes)[0] for inner in _item_spans(tokens)]
+
+
+def _describe(tokens) -> str:
+    tk = tokens[0]
+    text = tk.content or next((t.content for t in tokens if t.type == "inline"), "")
+    kind = tk.type.removesuffix("_open")
+    return f"{kind}: {text.strip()[:40]}".replace("\n", " ")
 
 
 def _table_block(tokens) -> dict[str, Any]:

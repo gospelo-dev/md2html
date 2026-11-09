@@ -372,8 +372,13 @@ def _validate_items(items: Any, loc: str) -> None:
         if not isinstance(item, dict) or not isinstance(item.get("text"), str):
             raise ContentError(f"{loc}.items[{i}] must be an object with a text string")
         for key in item:
-            if key not in ("text", "children"):
+            if key not in ("text", "children", "childrenOrdered"):
                 raise ContentError(f"{loc}.items[{i}] has unknown key {key!r}")
+        if "childrenOrdered" in item:
+            if not isinstance(item["childrenOrdered"], bool):
+                raise ContentError(f"{loc}.items[{i}].childrenOrdered must be a boolean")
+            if "children" not in item:
+                raise ContentError(f"{loc}.items[{i}].childrenOrdered requires children")
         if "children" in item:
             _validate_items(item["children"], f"{loc}.items[{i}]")
 

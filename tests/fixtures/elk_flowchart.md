@@ -1,7 +1,7 @@
 # ELK layout
 
-The same graph four times: three ways of asking for the ELK layout, and the
-default (dagre) for comparison.
+The same graph five times: three ways of asking for the ELK layout, the
+default (also ELK in Mermaid 12), and dagre for comparison.
 
 ## init directive
 
@@ -50,6 +50,23 @@ flowchart-elk TD
 ## default layout
 
 ```mermaid
+flowchart TD
+  A[Start] --> B{Check}
+  B -->|yes| C[Build]
+  B -->|no| D[Fix]
+  D --> B
+  C --> E[Deploy]
+  A --> E
+  C --> F[Notify]
+```
+
+## dagre
+
+```mermaid
+---
+config:
+  layout: dagre
+---
 flowchart TD
   A[Start] --> B{Check}
   B -->|yes| C[Build]

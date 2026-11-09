@@ -10,9 +10,26 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "claude" / "gospel
 sys.path.insert(0, str(SCRIPTS))
 
 import extract_markdown as em  # noqa: E402
-from md2html.content import envelope_script, make_envelope, make_source_page  # noqa: E402
 
 MD = "# T\n\n<script>alert(1)</script>\n\nbody\n"
+
+
+# The container as md2html writes it (docs/spec/gospelo-document.md). md2html itself is
+# TypeScript now, so the test builds the envelope by the spec instead of importing it.
+def make_source_page(markdown: str) -> dict:
+    return {"id": "p00", "kind": "source", "title": None, "continued": False,
+            "blocks": [{"type": "markdown", "text": markdown}]}
+
+
+def make_envelope(doc: dict, layout: dict) -> dict:
+    return {"format": "gospelo-document", "version": 1, "generator": "gospelo-md2html test",
+            "meta": doc["meta"], "layout": layout, "pages": doc["pages"]}
+
+
+def envelope_script(env: dict) -> str:
+    text = (json.dumps(env, ensure_ascii=False, indent=2)
+            .replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e"))
+    return '<script type="application/json" id="gospelo-document">\n' + text + "\n</script>"
 
 
 def content_doc():

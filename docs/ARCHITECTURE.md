@@ -11,7 +11,7 @@ The format itself (envelope object, container rules, conformance) is specified i
 | Distribute one file | No sidecar JSON, no external Mermaid library, no external scripts. Only images referenced by path stay external unless embedded. |
 | Editable without the tool | The content that determines every page is plain JSON inside the file, placed where an editor or an agent finds it first. |
 | Rebuildable from the file alone | `build out.gospelo.html` regenerates the rendered pages from the embedded envelope. The original Markdown is kept inside for `restore`. |
-| Cheap to read | The tool reads only the head of the file to get the envelope. Whatever follows (rendered pages, and in `embed` mode the multi-megabyte Mermaid library) is never parsed by Python. |
+| Cheap to read | The tool reads only the head of the file to get the envelope. Whatever follows (rendered pages, diagram SVG, scripts) is never parsed by the tool. |
 | Reviewable diffs | The envelope is pretty-printed and the rendered pages carry one block per line, so a change to one paragraph shows as a few changed lines in version control. |
 
 ## 2. File layout
@@ -34,17 +34,16 @@ flowchart TB
         Pn["section.page (n / N)"]
         P1 --> P2 --> Pn
     end
-    subgraph Tail["3. tail (large, static)"]
+    subgraph Tail["3. tail (small, static)"]
         direction TB
-        MJ["mermaid.min.js + MIT notice (about 3 MB)<br/>embed / link mode only: prerender (default) writes SVG instead"]
-        F["figures.js: image and Mermaid sizing,<br/>tall flowchart column split"]
+        F["figures.js: image and diagram sizing,<br/>tall flowchart column split"]
         N["page numbering script"]
-        MJ --> F --> N
+        F --> N
     end
     Head --> Body --> Tail
 
     classDef node fill:#FFFFFF,stroke:#666666,stroke-width:1.5px,color:#2C2C2C
-    class SIG,ENV,S,P1,P2,Pn,F,N,MJ node
+    class SIG,ENV,S,P1,P2,Pn,F,N node
     style Head fill:#F0FDFA,stroke:#0D9488,color:#2C2C2C
     style Body fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
     style Tail fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
@@ -56,8 +55,9 @@ flowchart TB
 | One envelope block, first in `<head>` | Before every `<style>` and every other `<script>`. In a 3.1 MB deck the envelope starts at byte 282 and ends around 37 KB, inside the first 64 KB chunk the reader fetches. |
 | Original Markdown inside the envelope | `pages[0]` with `kind: "source"`. There is no separate Markdown block; the data is held once. |
 | Fonts inside the `<style>` | Subsets of the bundled BIZ UD fonts (OFL), cut to the characters the envelope contains, as `@font-face` data URIs: Regular for body, Bold for headings and strong text, BIZ UDGothic for code. The same CSS is used by the measurement pages, so pagination does not depend on installed fonts. `embedFonts: false` omits them. |
-| Diagrams as SVG (default `prerender`) | The verify pass draws every Mermaid block in Chromium and the final file carries the resulting SVG inside each figure; no library is shipped. The source stays in the envelope, so `build` redraws it. |
-| Mermaid library at the end of `<body>` (`embed` / `link`) | Preceded by the MIT notice comment. Mermaid initializes after DOM construction, so the position does not change rendering. `figures.js` follows it, then the page-number script. |
+| Diagrams as SVG (`prerender`, the only mode) | Every Mermaid block is drawn by [mermaid-arch](https://github.com/gospelo-dev/mermaid-arch) (Mermaid 12) in its own page of the tool's browser, before measuring, and the file carries the SVG inside each figure (element ids `md2html-mermaid-N`); no library is shipped. The source stays in the envelope, so `build` redraws it. Diagrams with AWS icons are drawn from the user's AWS icon zip (`--icons-zip`); the icon pack stays inside mermaid-arch and only the drawn SVG reaches the file. |
+| Font Awesome in the `<head>` (only with `fa:` labels) | Font Awesome Free from mermaid-arch (all styles, fonts as data URIs), the same CSS the diagram page used, so the icons in the SVG labels render. |
+| Scripts at the end of `<body>` | `figures.js` (figure sizing and the column split of tall flowcharts), then the page-number script. |
 | Rendered pages regenerated on every build | The DOM is derived data. Editing it directly is not supported. |
 
 ### 2.1 Escaping rules
@@ -92,7 +92,7 @@ flowchart LR
 | Command | Input | Output |
 | --- | --- | --- |
 | `import` | Markdown | `<name>.gospelo.html` (paginated, verified). `-o name.gospelo.json` writes the sidecar form instead. |
-| `build` | `.gospelo.html` or `.gospelo.json` | the same HTML rewritten in place (or `-o` elsewhere; a JSON input produces `<name>.gospelo.html`), optional PDF (`--pdf`) and PPTX (`--pptx`: one image slide per page from the same Chromium rendering, link hotspots, optional transparent text layer) |
+| `build` | `.gospelo.html` or `.gospelo.json` | the same HTML rewritten in place (or `-o` elsewhere; a JSON input produces `<name>.gospelo.html`), optional PDF (`--pdf`) and PPTX (`--pptx`: one image slide per page from the same browser rendering, link hotspots, optional transparent text layer) |
 | `build --reflow` | same | all pages re-paginated from scratch |
 | `check` | same | capacity report, planned spills; writes nothing |
 | `restore` | same | the original Markdown from `pages[0]` |
@@ -101,35 +101,35 @@ Files written before 0.2.0 (three blocks `page-0`, `md2html-content`, `md2html-l
 
 ### 3.2 Inside import and build
 
-Both commands share the same measure, paginate, verify pipeline. Heights are never estimated: blocks are rendered in headless Chromium and measured.
+Both commands share the same measure, paginate, verify pipeline. Heights are never estimated: blocks are rendered in chrome-headless-shell (puppeteer-core) and measured. One browser serves every pass, and mermaid-arch draws the diagrams in a page of the same browser.
 
 ```mermaid
 flowchart TB
     subgraph Import["import"]
         direction LR
-        I1["parse Markdown<br/>into blocks"] --> I2["measure heights<br/>(column width and full width)"] --> I3["paginate<br/>capacity = height x 0.98"]
+        I1["parse Markdown<br/>into blocks"] --> I0["draw diagrams<br/>(mermaid-arch, SVG)"] --> I2["measure heights<br/>(column width and full width)"] --> I3["paginate<br/>capacity = height x 0.98"]
     end
     subgraph Common["settle and verify (import and build)"]
         direction LR
-        B1["place blocks per page<br/>(two columns, bands, figures)"] --> B2["render HTML"] --> B3["open in Chromium,<br/>detect overflow"]
+        B1["place blocks per page<br/>(two columns, bands, figures)"] --> B2["render HTML"] --> B3["open in the browser,<br/>detect overflow"]
         B3 -->|overflow| B4["push last block to a<br/>continuation page"] --> B2
         B3 -->|clean, max 3 rounds| B5["final page list"]
     end
     subgraph Out["output"]
         direction LR
-        O1["envelope at the top:<br/>Markdown, pages, effective layout"] --> O2["append rendered pages"] --> O3["append mermaid.min.js,<br/>figures.js, numbering"]
+        O1["envelope at the top:<br/>Markdown, pages, effective layout"] --> O2["append rendered pages<br/>(diagrams as SVG)"] --> O3["append figures.js,<br/>numbering"]
     end
     Import --> Common --> Out
     H["existing .gospelo.html"] -->|build: read the head| Common
 
     classDef node fill:#FFFFFF,stroke:#666666,stroke-width:1.5px,color:#2C2C2C
-    class I1,I2,I3,B1,B2,B3,B4,B5,O1,O2,O3,H node
+    class I1,I0,I2,I3,B1,B2,B3,B4,B5,O1,O2,O3,H node
     style Import fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
     style Common fill:#F0FDFA,stroke:#0D9488,color:#2C2C2C
     style Out fill:#F8FAFC,stroke:#94A3B8,color:#2C2C2C
 ```
 
-`import` runs the settle-and-verify pass too, so the file it writes is exactly what `build` would produce from it: a later `build` moves nothing. Mermaid diagrams are drawn by the vendored Mermaid.js in Chromium during the verify pass; in the default `prerender` mode the resulting SVG is written into the file and the library is left out, while the source text stays in the envelope so the diagram remains editable (edit the source, run `build`). `embed` and `link` keep the source in the page and let the browser draw it. The envelope records the Mermaid version used (`layout.mermaidVersion`), and every rebuild uses that version, because figure sizes and therefore pagination depend on it. Code blocks that name a language follow the same pattern: the vendored Shiki colors them in the measurement and verify passes, and the final file carries only the colored `<span>` markup, never the highlighter.
+`import` runs the settle-and-verify pass too, so the file it writes is exactly what `build` would produce from it: a later `build` moves nothing. Mermaid diagrams are drawn by mermaid-arch before the measurement pass, with the document's font subsets loaded into its page, so the measured and the written diagrams are the same SVG; the file carries that SVG and no library, while the source text stays in the envelope so the diagram remains editable (edit the source, run `build`). The envelope records the Mermaid version used (`layout.mermaidVersion`). A document recorded with another version (for example 11.12.2 from the Python releases, or `mermaidLib` `embed` / `link`) is not rebuilt silently: the tool stops and names the option that accepts the change (`--mermaid-version`, `--mermaid-lib prerender`), because figure sizes and therefore pagination depend on the version. Code blocks that name a language follow the same pattern: the vendored Shiki colors them in the measurement and verify passes, and the final file carries only the colored `<span>` markup, never the highlighter.
 
 ## 4. Reading the head only
 
@@ -138,23 +138,23 @@ Because the envelope sits at the top and ends with a known terminator, the tool 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'actorBkg': '#FFFFFF', 'actorBorder': '#666666', 'actorTextColor': '#2C2C2C', 'signalColor': '#0D9488', 'signalTextColor': '#2C2C2C', 'noteBkgColor': '#F0FDFA', 'noteBorderColor': '#0D9488', 'noteTextColor': '#2C2C2C', 'activationBkgColor': '#F8FAFC', 'activationBorderColor': '#94A3B8', 'loopTextColor': '#2C2C2C', 'labelBoxBkgColor': '#F0FDFA', 'labelBoxBorderColor': '#0D9488', 'labelTextColor': '#2C2C2C'}}}%%
 sequenceDiagram
-    participant T as md2html (Python)
+    participant T as md2html
     participant F as out.gospelo.html
 
     T->>F: open, read one 64 KB chunk
     F-->>T: bytes
     T->>T: find script id=gospelo-document (must be in this chunk)
     T->>T: find its closing tag, reading more chunks only if needed
-    T-->>T: stop reading (pages and Mermaid library never read)
-    T->>T: json.loads(envelope), validate format and version
+    T-->>T: stop reading (pages and scripts never read)
+    T->>T: JSON.parse(envelope), validate format and version
     Note over T: no envelope in the first chunk: error with a link to docs/MIGRATION.md
 ```
 
 | Aspect | Notes |
 | --- | --- |
-| Early stop | Implemented in `content.read_head`. Matters when `embedImages` is on or the document is long (tens of MB), and bounds memory to the head. |
+| Early stop | Implemented in `readHead` (`src/content.ts`). Matters when `embedImages` is on or the document is long (tens of MB), and bounds memory to the head. |
 | No fallback | A file without the envelope in its first chunk is rejected. There is no scan of the whole file and no reader for the earlier block layout. |
-| `build` needs nothing beyond the head | The Mermaid library comes from the vendored copy, the pages are regenerated from the envelope. |
+| `build` needs nothing beyond the head | Diagrams are redrawn by mermaid-arch from their source, the pages are regenerated from the envelope. Diagrams with AWS icons also need the AWS icon zip again (`--icons-zip`); its path is never recorded in the file. |
 
 ## 5. Editing loop
 
@@ -172,7 +172,7 @@ sequenceDiagram
     T->>H: read head
     T-->>A: capacity report, planned spills
     A->>T: build out.gospelo.html
-    T->>H: read head, re-render, verify in Chromium
+    T->>H: read head, re-render, verify in the browser
     T->>H: write the whole file (envelope updated with any spills)
     T-->>A: wrote out.gospelo.html
 ```
@@ -186,7 +186,7 @@ Rules that keep the loop predictable:
 ## 6. Diffs and version control
 
 - The envelope is pretty-printed (two-space indent, one key per line). A one-paragraph edit shows as a few changed lines.
-- The Mermaid library is a fixed vendored version, so it never appears in a diff.
+- No library is written into the file, so none appears in a diff. Diagram SVG is drawn deterministically (fixed element ids, fixed hand-drawn seed), so an unchanged diagram rebuilds to the same SVG.
 - Rendered pages carry one block per line, so a diff of the rendered part is block-sized. Review is still expected on the envelope side.
 - Content appears twice (envelope and DOM). This is by design: the DOM is derived and regenerated, and the duplication is what makes the file viewable without the tool.
 
@@ -194,9 +194,9 @@ Rules that keep the loop predictable:
 
 | Topic | Trade-off | Position |
 | --- | --- | --- |
-| File size | Embedding Mermaid.js would add about 3 MB per file. | Default `prerender` writes the diagrams as SVG and ships no library (a 15-page deck with five diagrams is about 0.45 MB, most of it the Font Awesome font when `fa:` icons are used). `embed` (browser-side drawing, about 3 MB) and `link` (shared `mermaid-<version>.min.js` next to the file) remain as options. |
+| File size | Embedding Mermaid would add several MB per file. | Diagrams are always written as SVG and no library is shipped. When `fa:` icons are used, Font Awesome Free adds about 0.5 MB (all styles, from mermaid-arch; the Python releases embedded the solid style only, about 0.2 MB). Browser-side drawing (`embed` / `link`) was removed: diagrams with AWS icons cannot be drawn in the viewer without shipping the icon pack. |
 | Multiple page formats | One file holds one layout. Producing A4 and 16:9 from the same content means two files. | Accepted. Rebuild with `build --page a4 --reflow` from either file; the envelope content is the same. |
-| Viewers without JavaScript | Some viewers do not run scripts: page numbers stay at their static values, and in `embed` / `link` mode Mermaid stays as source. | Accepted. With the default `prerender` the diagrams are plain SVG and display without scripts. |
+| Viewers without JavaScript | Some viewers do not run scripts: page numbers stay at their static values, and tall flowcharts are not split into columns. | Accepted. The diagrams are plain SVG and display without scripts. |
 | Images | Path-referenced images stay external by default. | Use `embedImages` when the file must be fully self-contained. |
 | Sidecar JSON | Useful for editing outside the HTML and for small diffs. | Optional output only (`.gospelo.json`, the same envelope). Not part of the distributed artifact. |
 | Earlier formats | Reading them would keep two code paths alive. | Not read. Migration is re-import from the Markdown, which every earlier file still contains (`docs/MIGRATION.md`). |
@@ -205,11 +205,12 @@ Rules that keep the loop predictable:
 
 | Concern | Location |
 | --- | --- |
-| Envelope model, head reader, validation | `scripts/md2html/content.py` |
-| Container rendering (head, pages, tail) | `scripts/md2html/render.py` |
-| Commands and default paths | `scripts/md2html.py` |
-| Per-version Mermaid vendoring and license notice | `scripts/md2html/assets.py`, `references/vendor/mermaid/<version>/` |
-| Shiki bundle (build-time only) and its build recipe | `scripts/md2html/assets.py`, `references/vendor/shiki/<version>/`, `references/vendor/shiki/build/` |
+| Envelope model, head reader, validation | `src/content.ts` |
+| Container rendering (head, pages, tail) | `src/render.ts` |
+| Commands and default paths | `src/cli.ts` (bundled as `scripts/md2html.mjs`; `scripts/md2html.py` is a thin wrapper) |
+| Diagram drawing through mermaid-arch | `src/mermaid.ts`, `vendor/gospelo-mermaid-arch-<version>-<commit>.tgz` |
+| Browser, measurement, PDF | `src/measure.ts` (puppeteer-core, chrome-headless-shell via mermaid-arch's `launchBrowser`) |
+| Shiki bundle (build-time only) and its build recipe | `src/assets.ts`, `references/vendor/shiki/<version>/`, `references/vendor/shiki/build/` |
 | Envelope schema (ships with the skill) | `references/gospelo-document.schema.json` |
 | Format specification | `docs/spec/gospelo-document.md` |
 | Migration from earlier files | `docs/MIGRATION.md`, `scripts/extract_markdown.py` |

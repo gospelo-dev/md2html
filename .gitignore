@@ -21,13 +21,9 @@ Thumbs.db
 # Local build outputs (the README examples write to out/) and ZIP distributions
 out/
 *.zip
-# copies of the vendored library that --mermaid-lib link places next to outputs
-# (mermaid-<version>.min.js + LICENSE.mermaid-<version>.txt); the vendored
-# per-version copies under references/vendor/mermaid/<version>/ stay tracked
-mermaid.min.js
-mermaid-*.min.js
-LICENSE.mermaid-*.txt
-!skills/claude/gospelo-md2html/references/vendor/mermaid/*/mermaid.min.js
+
+# Node (the skill's npm packages; `md2html.py setup` installs them from package-lock.json)
+node_modules/
 
 # Python
 __pycache__/
@@ -43,8 +39,6 @@ dist/
 build/
 # the Shiki bundle's build recipe is source, not output (its own .gitignore drops node_modules)
 !skills/claude/gospelo-md2html/references/vendor/shiki/build/
-# same for the Mermaid ELK layout recipe; its bundle is built by `setup --elk` into the user cache
-!skills/claude/gospelo-md2html/references/vendor/mermaid-layout-elk/build/
 *.egg-info/
 
 # md2html temporary measurement files (only left behind with MD2HTML_KEEP_TEMP=1)

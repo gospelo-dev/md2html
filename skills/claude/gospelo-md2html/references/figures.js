@@ -1,8 +1,11 @@
-/* figures.js: render Mermaid and size every figure in the browser
- * (docs/02_pipeline.md section (2), docs/04_layout_logic.md section 3).
+/* figures.js: size every figure in the browser, and split tall flowcharts
+ * into columns (docs/02_pipeline.md section (2), docs/04_layout_logic.md section 3).
+ *
+ * Mermaid diagrams are already SVG here: md2html draws them with mermaid-arch
+ * before writing the page.
  *
  * Each <figure class="figure"> carries data-figure-w / data-figure-h / data-figure-r
- * (the box it must fit, in CSS px, and the height cap ratio) written by Python.
+ * (the box it must fit, in CSS px, and the height cap ratio) written by md2html.
  * When done, <html data-figures="done"> is set; on any failure "error" plus
  * data-figures-error. Nothing here is duplicated in Python.
  */
@@ -251,63 +254,14 @@
     fig.dataset.figureR = String(SPLIT_FIGURE_R);
   }
 
-  /* ---- ELK layout: register, never fall back ----
-   * Mermaid draws a diagram whose layout is not registered with dagre and only
-   * logs a warning. Here an ELK request either renders with ELK or fails:
-   * with the vendored bundle its layouts are registered; without it, every
-   * ELK name gets a loader that throws; and an elk* name that is registered
-   * by neither is rejected before rendering. */
-  var ELK_LAYOUT_NAMES = ["elk", "elk.stress", "elk.force", "elk.mrtree", "elk.sporeOverlap"];
-  var ELK_REQUEST_RE = /^\s*flowchart-elk\b|["']?\b(?:layout|defaultRenderer)["']?\s*:\s*["']?(elk[\w.]*)/m;
-
-  function registerElk(nodes) {
-    var bundle = window.__mermaidLayoutElk;
-    var tag = document.querySelector("script[data-mermaid-layout-elk-version]");
-    var names;
-    if (bundle) {
-      var expected = tag && tag.getAttribute("data-mermaid-layout-elk-version");
-      if (expected && bundle.version !== expected) {
-        throw new Error("ELK layout bundle reports " + bundle.version + ", expected " + expected);
-      }
-      window.mermaid.registerLayoutLoaders(bundle.layouts);
-      names = bundle.layouts.map(function (l) { return l.name; });
-    } else {
-      var why = tag ? "the ELK layout bundle failed to load" : "the ELK layout bundle is not included";
-      window.mermaid.registerLayoutLoaders(ELK_LAYOUT_NAMES.map(function (name) {
-        return { name: name, loader: function () {
-          return Promise.reject(new Error("diagram requests layout " + name + ", but " + why));
-        } };
-      }));
-      names = ELK_LAYOUT_NAMES;
-    }
-    for (var i = 0; i < nodes.length; i++) {
-      var m = ELK_REQUEST_RE.exec(nodes[i].textContent || "");
-      var name = m && (m[1] || "elk");
-      if (name && names.indexOf(name) < 0) {
-        throw new Error("diagram requests layout " + name + ", which is not an ELK layout (" + names.join(", ") + ")");
-      }
-    }
-  }
-
   try {
-    var mermaidNodes = document.querySelectorAll("pre.mermaid");
-    if (mermaidNodes.length > 0) {
-      if (!window.mermaid) { throw new Error("mermaid library is not loaded"); }
-      registerElk(mermaidNodes);
-      window.mermaid.initialize({
-        startOnLoad: false,
-        theme: "base",
-        securityLevel: "loose",
-        themeVariables: {
-          fontSize: root.dataset.mermaidFontSize || "14px",
-          fontFamily: getComputedStyle(document.body).fontFamily
-        }
-      });
+    // diagrams arrive drawn (SVG from mermaid-arch); a source left undrawn is a bug upstream
+    var undrawn = document.querySelector("pre.mermaid");
+    if (undrawn) {
+      var owner = undrawn.closest("[data-block]");
+      throw new Error("Mermaid diagram was not drawn: " + ((owner && owner.dataset.block) || ""));
     }
     if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
-    if (mermaidNodes.length > 0) {
-      await window.mermaid.run({ nodes: mermaidNodes, suppressErrors: false });
-    }
     if (window.__shikiInit) { await window.__shikiInit(); }
     var imgs = Array.prototype.slice.call(document.querySelectorAll("figure.figure img"));
     await Promise.all(imgs.map(function (img) {

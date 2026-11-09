@@ -10,11 +10,12 @@ Supported platforms: **macOS / Linux / WSL2**
 
 | Dependency | Required | Notes |
 | --- | --- | --- |
-| uv | yes | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Python 3.10+ | yes | uv installs it if missing; the script declares its own dependencies (PEP 723) |
-| Chromium | yes | installed once by the skill's `setup` subcommand through Playwright |
+| Node.js 22.12+ (with npm) | yes | md2html is TypeScript, bundled as `scripts/md2html.mjs` |
+| uv | no | `curl -LsSf https://astral.sh/uv/install.sh \| sh`; runs the thin wrapper `scripts/md2html.py` (no Python dependencies; `python3` works too) |
+| npm packages, chrome-headless-shell | yes | installed once by the skill's `setup` subcommand (`npm ci`, then the browser into puppeteer's cache) |
+| AWS Architecture Icons zip | only for `aws:` icons | your own `Icon-package_*.zip` from https://aws.amazon.com/architecture/icons/, passed with `--icons-zip` |
 
-No `pip install`, no virtualenv. Mermaid.js and Font Awesome are vendored.
+mermaid-arch (Mermaid 12, Font Awesome Free), Shiki and the BIZ UD fonts are vendored in the skill.
 
 ## Install
 
@@ -36,7 +37,7 @@ python gospelo-md2html/scripts/install.py --project /path/to/your/repo
 
 Use `--user` instead of `--project` to install once for all projects on your machine, `--symlink` to link back to the clone while developing, and `--force` to replace an existing installation.
 
-**Then, once per machine, install Chromium:**
+**Then, once per installed copy, install the npm packages and chrome-headless-shell** (the installer does not copy `node_modules`):
 
 ```bash
 cd /path/to/your/repo
@@ -94,6 +95,9 @@ uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 uv run $S build  out/architecture.gospelo.html --pdf out/architecture.pdf
 uv run $S build  out/architecture.gospelo.html --pptx out/architecture.pptx   # PowerPoint (one image slide per page)
+
+# Diagrams with AWS icons (fn@{ icon: "aws:lambda", ... }): pass your AWS icon zip on every import / check / build
+uv run $S build  out/architecture.gospelo.html --icons-zip "<path to Icon-package_*.zip>"
 ```
 
 For slides use `--page 16x9` (or `4x3`); the default body size becomes 14pt and each `h2` becomes one slide.

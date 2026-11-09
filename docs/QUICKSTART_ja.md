@@ -10,11 +10,12 @@ English version: [QUICKSTART.md](QUICKSTART.md)
 
 | 依存 | 必須 | 補足 |
 | --- | --- | --- |
-| uv | はい | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Python 3.10+ | はい | 無ければ uv が導入する。スクリプトが自身の依存を宣言している (PEP 723) |
-| Chromium | はい | スキルの `setup` サブコマンドが Playwright 経由で 1 回だけ導入する |
+| Node.js 22.12 以上 (npm を含む) | はい | md2html は TypeScript で、`scripts/md2html.mjs` にまとめてある |
+| uv | いいえ | `curl -LsSf https://astral.sh/uv/install.sh \| sh`。薄いラッパー `scripts/md2html.py` を実行する (Python の依存はなく、`python3` でも動く) |
+| npm パッケージ、chrome-headless-shell | はい | スキルの `setup` サブコマンドが 1 回だけ導入する (`npm ci` の後、ブラウザを puppeteer のキャッシュへ) |
+| AWS のアーキテクチャアイコンの zip | `aws:` アイコンを使う場合だけ | https://aws.amazon.com/architecture/icons/ から入手した `Icon-package_*.zip` を `--icons-zip` で渡す |
 
-`pip install` も virtualenv も不要です。Mermaid.js と Font Awesome は同梱しています。
+mermaid-arch (Mermaid 12、Font Awesome Free)、Shiki、BIZ UD フォントはスキルに同梱しています。
 
 ## インストール
 
@@ -36,7 +37,7 @@ python gospelo-md2html/scripts/install.py --project /path/to/your/repo
 
 `--project` の代わりに `--user` でマシン全体に、開発中は `--symlink` でクローンへのリンクに、既存を置き換えるには `--force` を使います。
 
-**その後、マシンごとに 1 回 Chromium を導入します:**
+**その後、インストールしたコピーごとに 1 回、npm パッケージと chrome-headless-shell を導入します** (インストーラは `node_modules` をコピーしません):
 
 ```bash
 cd /path/to/your/repo
@@ -94,6 +95,9 @@ uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 uv run $S import docs/architecture.md -o out/architecture.gospelo.html --page a4
 uv run $S build  out/architecture.gospelo.html --pdf out/architecture.pdf
 uv run $S build  out/architecture.gospelo.html --pptx out/architecture.pptx   # PowerPoint (1 ページ 1 枚の画像スライド)
+
+# AWS アイコンを使う図 (fn@{ icon: "aws:lambda", ... }): import / check / build のたびに AWS のアイコン zip を渡す
+uv run $S build  out/architecture.gospelo.html --icons-zip "<path to Icon-package_*.zip>"
 ```
 
 スライドにするには `--page 16x9` (または `4x3`) を指定します。本文の既定が 14pt になり、`h2` ごとに 1 枚のスライドになります。

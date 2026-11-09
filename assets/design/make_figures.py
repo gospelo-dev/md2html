@@ -26,8 +26,8 @@ SRC = ROOT / "skills" / "claude" / "gospelo-md2html" / "src"
 _METRICS_JS = """
 const [{ getFormat }, { buildMetrics }] = await Promise.all([import(process.argv[1]), import(process.argv[2])])
 const m = buildMetrics(getFormat(process.argv[3]), null, 1.25, null, 'right', 0.5)
-const keys = ['pageWPx', 'pageHPx', 'marginVPx', 'marginHPx', 'contentWPx', 'contentHPx', 'headerBandPx',
-              'headerGapPx', 'col2Px', 'gutterPx']
+const keys = ['F', 'linePx', 'pageWPx', 'pageHPx', 'marginVPx', 'marginHPx', 'contentWPx', 'contentHPx',
+              'headerBandPx', 'headerGapPx', 'col2Px', 'gutterPx']
 console.log(JSON.stringify({ ...Object.fromEntries(keys.map((k) => [k, m[k]])), fmt: m.fmt }))
 """
 
@@ -51,7 +51,7 @@ L = {
         "gap": "gap F",
         "content": "content area",
         "col": "column",
-        "gutter": "gap 1.5F",
+        "gutter": "gap {ratio}F",
         "footer": "footer in the bottom margin, text min(0.75F, 0.36M)",
         "single": "single column",
         "chars": "chars/line",
@@ -88,7 +88,7 @@ L = {
         "gap": "間隔 F",
         "content": "本文領域",
         "col": "段",
-        "gutter": "段間 1.5F",
+        "gutter": "段間 {ratio}F",
         "footer": "フッターは下余白の帯の中。文字 min(0.75F, 0.36M)",
         "single": "単段",
         "chars": "字/行",
@@ -183,7 +183,7 @@ def metrics(page_id: str) -> SimpleNamespace:
     fmt = SimpleNamespace(width_mm=f["widthMm"], height_mm=f["heightMm"], margin_v_mm=f["marginVMm"],
                           margin_h_mm=f["marginHMm"], is_slide=f["isSlide"])
     return SimpleNamespace(
-        fmt=fmt, page_w_px=d["pageWPx"], page_h_px=d["pageHPx"], margin_v_px=d["marginVPx"],
+        fmt=fmt, F=d["F"], line_px=d["linePx"], page_w_px=d["pageWPx"], page_h_px=d["pageHPx"], margin_v_px=d["marginVPx"],
         margin_h_px=d["marginHPx"], content_w_px=d["contentWPx"], content_h_px=d["contentHPx"],
         header_band_px=d["headerBandPx"], header_gap_px=d["headerGapPx"], col2_px=d["col2Px"],
         gutter_px=d["gutterPx"],
@@ -217,7 +217,8 @@ def draw_page(svg: SVG, m, ox: float, oy: float, s: float, t: dict, two_columns:
             svg.rect(cx, y, colw, ch, fill="#FFFFFF", stroke=TEAL, sw=1)
             svg.lines(cx + 8, y + 22, colw - 16, int((ch - 20) / 14), 14)
             svg.text(cx + 8, y + 12, f'{t["col"]} {m.col2_px:.0f}px', size=9, fill=TEAL)
-        svg.dim_h(x + colw, x + colw + g, y - 6, t["gutter"], size=9)
+        # the gap as a multiple of F, from md2html's own metrics (2F by default)
+        svg.dim_h(x + colw, x + colw + g, y - 6, t["gutter"].format(ratio=f"{m.gutter_px / m.F:g}"), size=9)
     else:
         svg.lines(x + 8, y + 22, cw - 16, int((ch - 20) / 14), 14)
         svg.text(x + 8, y + 12, f'{t["single"]} {m.content_w_px:.0f}px', size=9, fill=TEAL)
